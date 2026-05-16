@@ -1,0 +1,48 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "parity-backend"
+version = "0.1.0"
+description = "Parity: a self-hosted two-party expense and payment tracking ledger (backend)."
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+    "Flask>=3.0",
+    "Flask-SQLAlchemy>=3.1",
+    "Flask-Migrate>=4.0",
+    "SQLAlchemy>=2.0",
+    "alembic>=1.13",
+    "argon2-cffi>=23.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.5",
+]
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+exclude = ["tests*", "migrations*", "instance*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+    "error",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["migrations"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
