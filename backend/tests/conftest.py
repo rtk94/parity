@@ -17,9 +17,16 @@ def app() -> Generator[Flask, None, None]:
     flask_app = create_app("testing")
     with flask_app.app_context():
         db.create_all()
-        yield flask_app
-        db.session.remove()
-        db.drop_all()
+        try:
+            yield flask_app
+        finally:
+            db.session.remove()
+            db.drop_all()
+            # Release pooled sqlite connections explicitly. Without this,
+            # Python 3.13 raises ResourceWarning for unclosed connections at
+            # interpreter shutdown and pytest's filterwarnings=error treats
+            # those as failures.
+            db.engine.dispose()
 
 
 @pytest.fixture

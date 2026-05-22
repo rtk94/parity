@@ -1,0 +1,66 @@
+"""Expense endpoints: create, list, get, confirm, discard, reverse."""
+
+from __future__ import annotations
+
+from flask import Blueprint, g, request
+
+from app.api._helpers import int_query_arg, json_body, translates_service_errors
+from app.api._serializers import serialize_expense
+from app.auth.decorators import login_required
+from app.services import expenses as expenses_service
+
+expenses_bp = Blueprint("expenses", __name__, url_prefix="/api/v1/expenses")
+
+
+@expenses_bp.post("")
+@login_required
+@translates_service_errors
+def create_expense():
+    expense = expenses_service.create(g.current_user, json_body())
+    return serialize_expense(expense), 201
+
+
+@expenses_bp.get("")
+@login_required
+@translates_service_errors
+def list_expenses():
+    relationship_id = int_query_arg("relationship_id")
+    status = request.args.get("status")
+    items = expenses_service.list_for_user(
+        g.current_user,
+        relationship_id=relationship_id,
+        status=status,
+    )
+    return {"items": [serialize_expense(e) for e in items]}, 200
+
+
+@expenses_bp.get("/<int:expense_id>")
+@login_required
+@translates_service_errors
+def get_expense(expense_id: int):
+    expense = expenses_service.get_for_user(g.current_user, expense_id)
+    return serialize_expense(expense), 200
+
+
+@expenses_bp.post("/<int:expense_id>/confirm")
+@login_required
+@translates_service_errors
+def confirm_expense(expense_id: int):
+    expense = expenses_service.confirm(g.current_user, expense_id)
+    return serialize_expense(expense), 200
+
+
+@expenses_bp.post("/<int:expense_id>/discard")
+@login_required
+@translates_service_errors
+def discard_expense(expense_id: int):
+    expense = expenses_service.discard(g.current_user, expense_id, json_body())
+    return serialize_expense(expense), 200
+
+
+@expenses_bp.post("/<int:expense_id>/reverse")
+@login_required
+@translates_service_errors
+def reverse_expense(expense_id: int):
+    reversal = expenses_service.reverse(g.current_user, expense_id)
+    return serialize_expense(reversal), 201
