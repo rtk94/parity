@@ -58,3 +58,16 @@ coverage.xml
 *.swp
 *.swo
 .DS_Store
+
+# Claude Code
+.claude/settings.local.json
+.claude/transcripts/
+.claude/plans/
+.claude/memory/cache/
+
+# Additional common files
+*.log
+*.pid
+.env.production
+.env.staging
+.env.test
