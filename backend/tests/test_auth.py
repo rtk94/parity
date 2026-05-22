@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from unittest.mock import patch
 
+from argon2.exceptions import VerifyMismatchError
 from flask import Flask
 from flask.testing import FlaskClient
 from sqlalchemy import select
 
+from app.auth import security
 from app.auth.security import hash_token
 from app.extensions import db
 from app.models import AuthToken
@@ -98,3 +101,34 @@ def test_duplicate_username_returns_409(client: FlaskClient) -> None:
     response = _register(client, display_name="Other Alice")
     assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "username_taken"
+
+
+def test_login_unknown_user_invokes_argon2_verify_once_for_timing(
+    client: FlaskClient,
+) -> None:
+    """Login with an unknown username still runs argon2 verify once.
+
+    Equalising the wall-clock cost of "user not found" with "user found,
+    wrong password" defeats username enumeration via response-time
+    analysis. The test cannot reliably assert on wall-clock timing, so
+    instead it confirms that the equalisation code path actually runs:
+    the hasher's ``verify`` method is invoked exactly once for an
+    unknown username.
+
+    ``argon2.PasswordHasher.verify`` is a slot method and cannot be
+    patched in place, so the test swaps the module-level ``_hasher``
+    reference for a mock; every ``_hasher.verify`` call in the
+    security module resolves to ``mock_hasher.verify`` for the
+    duration of the patch.
+    """
+    with patch.object(security, "_hasher") as mock_hasher:
+        mock_hasher.verify.side_effect = VerifyMismatchError("dummy mismatch")
+        response = client.post(
+            "/api/v1/auth/login",
+            json={"username": "no_such_user", "password": "anything"},
+        )
+        verify_call_count = mock_hasher.verify.call_count
+
+    assert response.status_code == 401
+    assert response.get_json()["error"]["code"] == "invalid_credentials"
+    assert verify_call_count == 1
