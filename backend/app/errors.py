@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from flask import Flask, jsonify
+from flask_limiter.errors import RateLimitExceeded
 from werkzeug.exceptions import HTTPException
 
 
@@ -44,6 +45,21 @@ def register_error_handlers(app: Flask) -> None:
 
     for status in _DEFAULT_SHORT_CODES:
         app.register_error_handler(status, _http_handler)
+
+    @app.errorhandler(RateLimitExceeded)
+    def _rate_limited(exc: RateLimitExceeded):
+        # ``exc.description`` is set to ``str(limit.limit)`` by
+        # ``RateLimitExceeded.__init__`` — e.g. ``"5 per 1 minute"`` —
+        # which is exactly what we want to surface to clients in the
+        # error envelope. Flask-Limiter's ``after_request`` hook adds
+        # the ``Retry-After`` and ``X-RateLimit-*`` headers (because
+        # the limiter is constructed with ``headers_enabled=True``).
+        return error_response(
+            429,
+            "rate_limited",
+            "Rate limit exceeded. Try again later.",
+            details={"limit": str(exc.description)},
+        )
 
     @app.errorhandler(Exception)
     def _unhandled(exc: Exception):

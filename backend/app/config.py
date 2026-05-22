@@ -12,6 +12,16 @@ class Config:
     SQLALCHEMY_TRACK_MODIFICATIONS: bool = False
     JSON_SORT_KEYS: bool = False
 
+    # Rate limiting (Flask-Limiter). The defaults are sized for a single
+    # self-hosted instance; tighten or relax via the corresponding env
+    # variables or by subclassing ``Config``.
+    RATELIMIT_ENABLED: bool = True
+    RATELIMIT_STORAGE_URI: str = os.environ.get("RATELIMIT_STORAGE_URI", "memory://")
+    RATELIMIT_LOGIN_IP: str = os.environ.get("RATELIMIT_LOGIN_IP", "5 per minute")
+    RATELIMIT_LOGIN_USERNAME: str = os.environ.get("RATELIMIT_LOGIN_USERNAME", "20 per hour")
+    RATELIMIT_REGISTER: str = os.environ.get("RATELIMIT_REGISTER", "5 per hour")
+    RATELIMIT_WRITE: str = os.environ.get("RATELIMIT_WRITE", "60 per minute")
+
 
 class DevelopmentConfig(Config):
     DEBUG: bool = True
@@ -23,6 +33,11 @@ class TestingConfig(Config):
     SECRET_KEY: str = "test-secret-key"
     SQLALCHEMY_DATABASE_URI: str = "sqlite:///:memory:"
     WTF_CSRF_ENABLED: bool = False
+    # Phase 1/2 tests run against an unrate-limited app so they can issue
+    # large numbers of requests per fixture without tripping limits. The
+    # dedicated ``rate_limited_app`` fixture in ``tests/test_rate_limit.py``
+    # overrides this to ``True``.
+    RATELIMIT_ENABLED: bool = False
 
 
 class ProductionConfig(Config):
