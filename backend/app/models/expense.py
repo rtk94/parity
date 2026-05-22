@@ -6,9 +6,10 @@ import enum
 from datetime import datetime
 
 from sqlalchemy import CheckConstraint, DateTime, Enum, ForeignKey, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.extensions import db
+from app.models.expense_share import ExpenseShare
 
 
 class ExpenseStatus(enum.StrEnum):
@@ -50,3 +51,10 @@ class Expense(db.Model):
     discarded_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("user.id"), nullable=True)
     rejection_reason: Mapped[str | None] = mapped_column(String(512), nullable=True)
     reverses_expense_id: Mapped[int | None] = mapped_column(ForeignKey("expense.id"), nullable=True)
+
+    shares: Mapped[list[ExpenseShare]] = relationship(
+        ExpenseShare,
+        primaryjoin="ExpenseShare.expense_id == Expense.id",
+        order_by="ExpenseShare.id",
+        foreign_keys="ExpenseShare.expense_id",
+    )
