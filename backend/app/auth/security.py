@@ -10,6 +10,13 @@ from argon2.exceptions import VerifyMismatchError
 
 _hasher = PasswordHasher()
 
+# Computed once at import time. The value is irrelevant; it is never
+# verified against a real password. Its only purpose is to give the
+# "user not found" branch of login the same wall-clock cost as the
+# "user found, wrong password" branch, defeating username enumeration
+# by response-time analysis.
+_DUMMY_HASH = _hasher.hash("parity_timing_equalizer_do_not_match")
+
 
 def hash_password(password: str) -> str:
     return _hasher.hash(password)
@@ -22,6 +29,22 @@ def verify_password(password_hash: str, password: str) -> bool:
         return False
     except Exception:
         return False
+
+
+def verify_dummy_password(password: str) -> None:
+    """Run argon2 verify against a fixed dummy hash, discarding the result.
+
+    Called from the login flow when the supplied username does not exist,
+    so that branch has the same wall-clock cost as the "user found,
+    wrong password" branch. Any verify outcome is acceptable — the call
+    is performed purely for its CPU cost.
+    """
+    try:
+        _hasher.verify(_DUMMY_HASH, password)
+    except VerifyMismatchError:
+        pass
+    except Exception:
+        pass
 
 
 def generate_token() -> str:

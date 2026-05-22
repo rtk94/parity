@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+# Imported for the after_create event listener side effect; do not remove.
+from app.models import _triggers  # noqa: F401
 from app.models.auth_token import AuthToken
 from app.models.expense import Expense, ExpenseStatus
 from app.models.expense_share import ExpenseShare

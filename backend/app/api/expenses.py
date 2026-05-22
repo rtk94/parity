@@ -5,6 +5,7 @@ from __future__ import annotations
 from flask import Blueprint, g, request
 
 from app.api._helpers import int_query_arg, json_body, translates_service_errors
+from app.api._rate_limits import authed_write_limit
 from app.api._serializers import serialize_expense
 from app.auth.decorators import login_required
 from app.services import expenses as expenses_service
@@ -14,6 +15,7 @@ expenses_bp = Blueprint("expenses", __name__, url_prefix="/api/v1/expenses")
 
 @expenses_bp.post("")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def create_expense():
     expense = expenses_service.create(g.current_user, json_body())
@@ -44,6 +46,7 @@ def get_expense(expense_id: int):
 
 @expenses_bp.post("/<int:expense_id>/confirm")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def confirm_expense(expense_id: int):
     expense = expenses_service.confirm(g.current_user, expense_id)
@@ -52,6 +55,7 @@ def confirm_expense(expense_id: int):
 
 @expenses_bp.post("/<int:expense_id>/discard")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def discard_expense(expense_id: int):
     expense = expenses_service.discard(g.current_user, expense_id, json_body())
@@ -60,6 +64,7 @@ def discard_expense(expense_id: int):
 
 @expenses_bp.post("/<int:expense_id>/reverse")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def reverse_expense(expense_id: int):
     reversal = expenses_service.reverse(g.current_user, expense_id)
