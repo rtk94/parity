@@ -148,7 +148,26 @@ git pull --ff-only
 git status              # working tree clean before branching
 ```
 
-### 2. Branch
+### 2. Verify the starting point
+
+Before branching, confirm `HEAD` is aligned with `origin/main`. Step 1
+guarantees this when followed in order, but it's easy to skip — e.g.
+when work began on a previous feature branch that has since been
+merged but is still checked out locally. The check below catches that
+case without depending on memory:
+
+```bash
+git fetch origin
+git log origin/main..HEAD --oneline   # must print nothing
+```
+
+If the output is non-empty, `HEAD` carries commits that are not in
+`origin/main`. Branching here would bundle those commits into the new
+PR. Resolve before continuing — typically by checking out `main` and
+re-running step 1, or by stashing in-flight work and replaying it on a
+branch cut from `main`.
+
+### 3. Branch
 
 ```bash
 git checkout -b <branch-name>
@@ -161,7 +180,7 @@ Naming convention (lowercase, hyphenated):
 - `fix/<slug>` for bug fixes
 - `chore/<slug>` for tooling, docs, cleanup
 
-### 3. Code, test, lint
+### 4. Code, test, lint
 
 Iterate locally. Before committing, all three must pass cleanly with no
 warnings:
@@ -173,7 +192,7 @@ ruff check .
 ruff format --check .
 ```
 
-### 4. Commit
+### 5. Commit
 
 Match the established commit style: title `<topic>: <one-line summary>`,
 body in 2–4 paragraphs that explain *what* changed and *why*. Phase
@@ -195,13 +214,13 @@ EOF
 )"
 ```
 
-### 5. Push
+### 6. Push
 
 ```bash
 git push -u origin <branch-name>
 ```
 
-### 6. Open a PR
+### 7. Open a PR
 
 ```bash
 gh pr create --base main --title "<title>" --body "$(cat <<'EOF'
@@ -227,7 +246,7 @@ revoked), regenerate at https://github.com/settings/tokens with scopes
 echo 'ghp_NEW_TOKEN' | gh auth login --hostname github.com --with-token
 ```
 
-### 7. After the PR is merged
+### 8. After the PR is merged
 
 ```bash
 git checkout main
