@@ -25,5 +25,8 @@ testing, and the example `curl` flow.
 
 ## Status
 
-Phase 1: backend skeleton with auth, health, and DB schema. Expense,
-payment, relationship, and balance endpoints are not yet implemented.
+Phase 2 complete on the backend: auth, health, relationships, expenses,
+payments, and balance computation are all wired up and exercised end to
+end. Remaining backend work is hardening (DB-level immutability
+triggers, rate limiting, etc.); the Android client is still a Phase 5+
+placeholder.
