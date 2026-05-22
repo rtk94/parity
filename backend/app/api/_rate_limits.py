@@ -31,6 +31,27 @@ def authed_write_limit():
     )
 
 
+def change_password_limit():
+    """Return the per-authenticated-user change-password limit decorator.
+
+    Distinct from the generic write limit so a tighter cap can be set
+    on credential mutation; a stolen token must not be a free
+    brute-force gun against the user's current password.
+    """
+    return limiter.limit(
+        lambda: current_app.config["RATELIMIT_CHANGE_PASSWORD"],
+        key_func=lambda: f"user:{g.current_user.id}",
+    )
+
+
+def refresh_limit():
+    """Return the per-authenticated-user token-refresh limit decorator."""
+    return limiter.limit(
+        lambda: current_app.config["RATELIMIT_REFRESH"],
+        key_func=lambda: f"user:{g.current_user.id}",
+    )
+
+
 def login_ip_limit():
     """Return the per-IP login limit decorator."""
     return limiter.limit(lambda: current_app.config["RATELIMIT_LOGIN_IP"])

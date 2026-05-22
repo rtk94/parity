@@ -4,10 +4,16 @@ from __future__ import annotations
 
 from flask import Blueprint, g, request
 
-from app.api._helpers import json_body, translates_service_errors
+from app.api._helpers import (
+    json_body,
+    paginated_response,
+    pagination_args,
+    translates_service_errors,
+)
 from app.api._rate_limits import authed_write_limit
 from app.api._serializers import (
     serialize_balance_view,
+    serialize_expense,
     serialize_relationship,
 )
 from app.auth.decorators import login_required
@@ -22,8 +28,13 @@ relationships_bp = Blueprint("relationships", __name__, url_prefix="/api/v1/rela
 @authed_write_limit()
 @translates_service_errors
 def invite():
-    rel = relationships_service.invite_by_username(g.current_user, json_body())
-    return serialize_relationship(rel), 201
+    rel, expense = relationships_service.invite_by_username(g.current_user, json_body())
+    if expense is None:
+        return serialize_relationship(rel), 201
+    return {
+        "relationship": serialize_relationship(rel),
+        "expense": serialize_expense(expense),
+    }, 201
 
 
 @relationships_bp.get("")
@@ -31,8 +42,13 @@ def invite():
 @translates_service_errors
 def list_relationships():
     status = request.args.get("status")
-    items = relationships_service.list_for_user(g.current_user, status=status)
-    return {"items": [serialize_relationship(rel) for rel in items]}, 200
+    limit, offset = pagination_args()
+    items, total = relationships_service.list_for_user(
+        g.current_user, status=status, limit=limit, offset=offset
+    )
+    return paginated_response(
+        [serialize_relationship(rel) for rel in items], total, limit, offset
+    ), 200
 
 
 @relationships_bp.get("/<int:relationship_id>")

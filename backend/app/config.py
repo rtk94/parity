@@ -21,6 +21,13 @@ class Config:
     RATELIMIT_LOGIN_USERNAME: str = os.environ.get("RATELIMIT_LOGIN_USERNAME", "20 per hour")
     RATELIMIT_REGISTER: str = os.environ.get("RATELIMIT_REGISTER", "5 per hour")
     RATELIMIT_WRITE: str = os.environ.get("RATELIMIT_WRITE", "60 per minute")
+    RATELIMIT_CHANGE_PASSWORD: str = os.environ.get("RATELIMIT_CHANGE_PASSWORD", "5 per hour")
+    RATELIMIT_REFRESH: str = os.environ.get("RATELIMIT_REFRESH", "10 per hour")
+
+    # Bearer token lifetimes. Idle is sliding from ``last_used_at``;
+    # absolute is a hard cap from ``created_at``.
+    TOKEN_ABSOLUTE_LIFETIME_DAYS: int = int(os.environ.get("TOKEN_ABSOLUTE_LIFETIME_DAYS", "365"))
+    TOKEN_IDLE_LIFETIME_DAYS: int = int(os.environ.get("TOKEN_IDLE_LIFETIME_DAYS", "30"))
 
 
 class DevelopmentConfig(Config):

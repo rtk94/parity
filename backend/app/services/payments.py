@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from app.extensions import db
 from app.models import Payment, PaymentStatus, Relationship, RelationshipStatus, User
@@ -79,7 +79,9 @@ def list_for_user(
     *,
     relationship_id: int | None,
     status: str | None,
-) -> list[Payment]:
+    limit: int,
+    offset: int,
+) -> tuple[list[Payment], int]:
     visible_rel_ids = select(Relationship.id).where(
         or_(
             Relationship.inviting_user_id == user.id,
@@ -96,8 +98,11 @@ def list_for_user(
             raise ValidationError("invalid_status", f"Unknown status: {status!r}.")
         stmt = stmt.where(Payment.status == PaymentStatus(status))
 
-    stmt = stmt.order_by(Payment.created_at.desc(), Payment.id.desc())
-    return list(db.session.execute(stmt).scalars().all())
+    total = db.session.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+
+    stmt = stmt.order_by(Payment.created_at.desc(), Payment.id.desc()).limit(limit).offset(offset)
+    items = list(db.session.execute(stmt).scalars().all())
+    return items, total
 
 
 def get_for_user(user: User, payment_id: int) -> Payment:

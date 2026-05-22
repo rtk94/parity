@@ -290,3 +290,52 @@ def test_get_endpoints_are_not_rate_limited(rate_limited_client: FlaskClient) ->
     for _ in range(200):
         resp = rate_limited_client.get("/api/v1/health")
         assert resp.status_code == 200
+
+
+# --- change-password limit (5/hour per user) -------------------------
+
+
+def test_change_password_limit_returns_429_after_five_attempts(
+    rate_limited_client: FlaskClient,
+) -> None:
+    _, alice_token = make_logged_in_user(rate_limited_client, "alice")
+    headers = auth_headers(alice_token)
+
+    # Five 422 attempts (wrong current password) still count against the limit.
+    for attempt in range(5):
+        resp = rate_limited_client.post(
+            "/api/v1/auth/change-password",
+            json={
+                "current_password": f"wrong-{attempt}",
+                "new_password": "longenough-new-password",
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 422, f"Attempt {attempt + 1}: {resp.get_json()}"
+        assert resp.get_json()["error"]["code"] == "invalid_current_password"
+
+    resp = rate_limited_client.post(
+        "/api/v1/auth/change-password",
+        json={"current_password": "wrong-final", "new_password": "longenough-new-password"},
+        headers=headers,
+    )
+    assert resp.status_code == 429
+    assert resp.get_json()["error"]["code"] == "rate_limited"
+
+
+# --- refresh limit (10/hour per user) --------------------------------
+
+
+def test_refresh_limit_returns_429_after_ten_attempts(
+    rate_limited_client: FlaskClient,
+) -> None:
+    _, token = make_logged_in_user(rate_limited_client, "alice")
+
+    for attempt in range(10):
+        resp = rate_limited_client.post("/api/v1/auth/refresh", headers=auth_headers(token))
+        assert resp.status_code == 200, f"Attempt {attempt + 1}: {resp.get_json()}"
+        token = resp.get_json()["token"]
+
+    resp = rate_limited_client.post("/api/v1/auth/refresh", headers=auth_headers(token))
+    assert resp.status_code == 429
+    assert resp.get_json()["error"]["code"] == "rate_limited"
