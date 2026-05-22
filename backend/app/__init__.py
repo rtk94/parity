@@ -52,11 +52,14 @@ def create_app(config_name: str | None = None) -> Flask:
 
     # Import models so SQLAlchemy + Alembic see them.
     from app import models  # noqa: F401
-    from app.api import health_bp
+    from app.api import expenses_bp, health_bp, payments_bp, relationships_bp
     from app.auth import auth_bp
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(relationships_bp)
+    app.register_blueprint(expenses_bp)
+    app.register_blueprint(payments_bp)
 
     register_error_handlers(app)
 
