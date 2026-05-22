@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from app.extensions import db
 from app.models import (
@@ -25,27 +25,24 @@ from app.services import (
 )
 
 
-def create(creator: User, payload: dict[str, Any] | None) -> Expense:
+def _stage_expense_against(
+    creator: User, rel: Relationship, payload: dict[str, Any] | None
+) -> Expense:
+    """Validate ``payload`` against ``rel.parties()`` and stage a pending
+    expense plus its shares on the current session.
+
+    Does *not* commit; the caller is responsible for the transaction so
+    it can compose with other writes (e.g. the bundled invite + first
+    expense flow). The relationship's status is not consulted here — the
+    callers enforce whatever status policy they require.
+    """
     if not isinstance(payload, dict):
         raise BadRequestError(message="JSON body required.")
 
-    relationship_id = payload.get("relationship_id")
     payer_id = payload.get("payer_user_id")
     total_cents = payload.get("total_cents")
     description = payload.get("description")
     shares = payload.get("shares")
-
-    if not isinstance(relationship_id, int) or isinstance(relationship_id, bool):
-        raise NotFoundError("relationship_not_found", "Relationship not found.")
-
-    rel = db.session.get(Relationship, relationship_id)
-    if rel is None or creator.id not in rel.parties():
-        raise NotFoundError("relationship_not_found", "Relationship not found.")
-    if rel.status != RelationshipStatus.accepted:
-        raise ConflictError(
-            "relationship_not_accepted",
-            "Relationship is not accepted.",
-        )
 
     if not isinstance(total_cents, int) or isinstance(total_cents, bool) or total_cents <= 0:
         raise ValidationError("invalid_amount", "total_cents must be a positive integer.")
@@ -123,9 +120,43 @@ def create(creator: User, payload: dict[str, Any] | None) -> Expense:
             )
         )
 
+    return expense
+
+
+def create(creator: User, payload: dict[str, Any] | None) -> Expense:
+    if not isinstance(payload, dict):
+        raise BadRequestError(message="JSON body required.")
+
+    relationship_id = payload.get("relationship_id")
+    if not isinstance(relationship_id, int) or isinstance(relationship_id, bool):
+        raise NotFoundError("relationship_not_found", "Relationship not found.")
+
+    rel = db.session.get(Relationship, relationship_id)
+    if rel is None or creator.id not in rel.parties():
+        raise NotFoundError("relationship_not_found", "Relationship not found.")
+    if rel.status != RelationshipStatus.accepted:
+        raise ConflictError(
+            "relationship_not_accepted",
+            "Relationship is not accepted.",
+        )
+
+    expense = _stage_expense_against(creator, rel, payload)
     db.session.commit()
     db.session.refresh(expense)
     return expense
+
+
+def create_for_pending_relationship(
+    creator: User, rel: Relationship, payload: dict[str, Any] | None
+) -> Expense:
+    """Stage a pending expense against a just-created pending relationship.
+
+    Used only by the bundled invite-with-first-expense flow in
+    ``relationships`` service. Does not commit; the bundled flow runs
+    the whole sequence (relationship insert + expense + shares) in one
+    transaction so a 422 on the expense rolls back the relationship.
+    """
+    return _stage_expense_against(creator, rel, payload)
 
 
 def list_for_user(
@@ -133,7 +164,9 @@ def list_for_user(
     *,
     relationship_id: int | None,
     status: str | None,
-) -> list[Expense]:
+    limit: int,
+    offset: int,
+) -> tuple[list[Expense], int]:
     visible_rel_ids = select(Relationship.id).where(
         or_(
             Relationship.inviting_user_id == user.id,
@@ -150,8 +183,11 @@ def list_for_user(
             raise ValidationError("invalid_status", f"Unknown status: {status!r}.")
         stmt = stmt.where(Expense.status == ExpenseStatus(status))
 
-    stmt = stmt.order_by(Expense.created_at.desc(), Expense.id.desc())
-    return list(db.session.execute(stmt).scalars().all())
+    total = db.session.execute(select(func.count()).select_from(stmt.subquery())).scalar_one()
+
+    stmt = stmt.order_by(Expense.created_at.desc(), Expense.id.desc()).limit(limit).offset(offset)
+    items = list(db.session.execute(stmt).scalars().all())
+    return items, total
 
 
 def get_for_user(user: User, expense_id: int) -> Expense:

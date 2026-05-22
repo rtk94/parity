@@ -18,8 +18,11 @@ in DB) that should not be casually broken.
 
 - Phase 1 ✓: backend skeleton (auth, health, ORM schema).
 - Phase 2 ✓: relationships, expenses, payments, balance.
-- Phase 3 (planned): hardening — DB-level immutability triggers, rate
-  limiting, etc.
+- Phase 3 ✓: hardening — DB-level immutability triggers, rate
+  limiting, login response-timing equalisation.
+- Phase 4 ✓: bundled invite + first expense, list-endpoint
+  pagination, password change, token expiry (idle + absolute) and
+  refresh.
 - Phase 5+ (planned): Android client.
 
 Update this section as phases land.

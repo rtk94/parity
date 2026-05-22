@@ -437,3 +437,120 @@ def test_get_detail_of_non_party_payment_returns_404(client: FlaskClient) -> Non
     )
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "not_found"
+
+
+# --- pagination ------------------------------------------------------
+
+
+def _create_payments(
+    client: FlaskClient,
+    creator_token: str,
+    *,
+    relationship_id: int,
+    from_user_id: int,
+    to_user_id: int,
+    count: int,
+    confirm_token: str | None = None,
+):
+    for i in range(count):
+        make_payment(
+            client,
+            creator_token,
+            relationship_id=relationship_id,
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            amount_cents=100 + i,
+            confirm_token=confirm_token,
+        )
+
+
+def test_payments_pagination_default_and_last_page(client: FlaskClient) -> None:
+    alice, bob, alice_token, _, rel = _two_party_setup(client)
+    expected_total = 55
+    _create_payments(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        from_user_id=alice["id"],
+        to_user_id=bob["id"],
+        count=expected_total,
+    )
+
+    page1 = client.get("/api/v1/payments", headers=auth_headers(alice_token)).get_json()
+    assert page1["limit"] == 50
+    assert page1["offset"] == 0
+    assert page1["total"] == expected_total
+    assert page1["has_more"] is True
+    assert len(page1["items"]) == 50
+
+    page2 = client.get("/api/v1/payments?offset=50", headers=auth_headers(alice_token)).get_json()
+    assert page2["has_more"] is False
+    assert len(page2["items"]) == 5
+
+
+def test_payments_pagination_filters_compose(client: FlaskClient) -> None:
+    alice, bob, alice_token, bob_token, rel = _two_party_setup(client)
+    _create_payments(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        from_user_id=alice["id"],
+        to_user_id=bob["id"],
+        count=4,
+    )
+    _create_payments(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        from_user_id=alice["id"],
+        to_user_id=bob["id"],
+        count=3,
+        confirm_token=bob_token,
+    )
+
+    body = client.get(
+        "/api/v1/payments?status=confirmed&limit=10",
+        headers=auth_headers(alice_token),
+    ).get_json()
+    assert body["total"] == 3
+    assert body["has_more"] is False
+    assert all(item["status"] == "confirmed" for item in body["items"])
+
+
+def test_payments_pagination_invalid_offset_returns_422(client: FlaskClient) -> None:
+    _, _, alice_token, _, _ = _two_party_setup(client)
+
+    resp = client.get("/api/v1/payments?offset=-1", headers=auth_headers(alice_token))
+    assert resp.status_code == 422
+    body = resp.get_json()["error"]
+    assert body["code"] == "invalid_pagination"
+    assert body["details"]["parameter"] == "offset"
+
+
+def test_payments_pagination_excludes_other_users_rows(client: FlaskClient) -> None:
+    alice, bob, alice_token, _, rel_ab = _two_party_setup(client)
+    carol, carol_token = make_logged_in_user(client, "carol")
+    # Carol invites Bob; payments on that relationship must be
+    # invisible to Alice even though Bob is a shared counterparty.
+    rel_bc = make_relationship(client, carol_token, "bob", accept=True)
+
+    _create_payments(
+        client,
+        alice_token,
+        relationship_id=rel_ab["id"],
+        from_user_id=alice["id"],
+        to_user_id=bob["id"],
+        count=3,
+    )
+    _create_payments(
+        client,
+        carol_token,
+        relationship_id=rel_bc["id"],
+        from_user_id=carol["id"],
+        to_user_id=bob["id"],
+        count=2,
+    )
+
+    body = client.get("/api/v1/payments", headers=auth_headers(alice_token)).get_json()
+    assert body["total"] == 3
+    assert len(body["items"]) == 3
