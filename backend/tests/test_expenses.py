@@ -786,3 +786,150 @@ def test_get_detail_of_non_party_expense_returns_404(client: FlaskClient) -> Non
     )
     assert response.status_code == 404
     assert response.get_json()["error"]["code"] == "not_found"
+
+
+# --- pagination ------------------------------------------------------
+
+
+def _create_expenses(
+    client: FlaskClient,
+    creator_token: str,
+    *,
+    relationship_id: int,
+    payer_user_id: int,
+    counterparty_id: int,
+    count: int,
+    confirm_token: str | None = None,
+):
+    """Create ``count`` pending expenses against ``relationship_id``."""
+    for i in range(count):
+        make_expense(
+            client,
+            creator_token,
+            relationship_id=relationship_id,
+            payer_user_id=payer_user_id,
+            total_cents=100 + i,
+            shares=[
+                {"user_id": payer_user_id, "amount_cents": 50},
+                {"user_id": counterparty_id, "amount_cents": 50 + i},
+            ],
+            description=f"Expense {i}",
+            confirm_token=confirm_token,
+        )
+
+
+def test_expenses_pagination_default_and_last_page(client: FlaskClient) -> None:
+    alice, bob, alice_token, _, rel = _two_party_setup(client)
+    expected_total = 55
+    _create_expenses(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        payer_user_id=alice["id"],
+        counterparty_id=bob["id"],
+        count=expected_total,
+    )
+
+    page1 = client.get("/api/v1/expenses", headers=auth_headers(alice_token)).get_json()
+    assert page1["limit"] == 50
+    assert page1["offset"] == 0
+    assert page1["total"] == expected_total
+    assert page1["has_more"] is True
+    assert len(page1["items"]) == 50
+
+    page2 = client.get("/api/v1/expenses?offset=50", headers=auth_headers(alice_token)).get_json()
+    assert page2["offset"] == 50
+    assert page2["has_more"] is False
+    assert len(page2["items"]) == 5
+
+
+def test_expenses_pagination_custom_limit_and_offset(client: FlaskClient) -> None:
+    alice, bob, alice_token, _, rel = _two_party_setup(client)
+    _create_expenses(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        payer_user_id=alice["id"],
+        counterparty_id=bob["id"],
+        count=7,
+    )
+
+    body = client.get(
+        "/api/v1/expenses?limit=3&offset=2", headers=auth_headers(alice_token)
+    ).get_json()
+    assert body["limit"] == 3
+    assert body["offset"] == 2
+    assert body["total"] == 7
+    assert body["has_more"] is True
+    assert len(body["items"]) == 3
+
+
+def test_expenses_pagination_filters_compose(client: FlaskClient) -> None:
+    alice, bob, alice_token, bob_token, rel = _two_party_setup(client)
+    # 6 pending, 4 confirmed.
+    _create_expenses(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        payer_user_id=alice["id"],
+        counterparty_id=bob["id"],
+        count=6,
+    )
+    _create_expenses(
+        client,
+        alice_token,
+        relationship_id=rel["id"],
+        payer_user_id=alice["id"],
+        counterparty_id=bob["id"],
+        count=4,
+        confirm_token=bob_token,
+    )
+
+    body = client.get(
+        "/api/v1/expenses?status=confirmed&limit=10",
+        headers=auth_headers(alice_token),
+    ).get_json()
+    assert body["total"] == 4
+    assert body["limit"] == 10
+    assert body["has_more"] is False
+    assert all(item["status"] == "confirmed" for item in body["items"])
+
+
+def test_expenses_pagination_invalid_limit_returns_422(client: FlaskClient) -> None:
+    _, _, alice_token, _, _ = _two_party_setup(client)
+
+    over = client.get("/api/v1/expenses?limit=201", headers=auth_headers(alice_token))
+    assert over.status_code == 422
+    assert over.get_json()["error"]["code"] == "invalid_pagination"
+
+    zero = client.get("/api/v1/expenses?limit=0", headers=auth_headers(alice_token))
+    assert zero.status_code == 422
+
+
+def test_expenses_pagination_excludes_other_users_rows(client: FlaskClient) -> None:
+    alice, bob, alice_token, _, rel_ab = _two_party_setup(client)
+    carol, carol_token = make_logged_in_user(client, "carol")
+    rel_bc = make_relationship(client, carol_token, "bob", accept=True)
+
+    # 3 visible to Alice.
+    _create_expenses(
+        client,
+        alice_token,
+        relationship_id=rel_ab["id"],
+        payer_user_id=alice["id"],
+        counterparty_id=bob["id"],
+        count=3,
+    )
+    # 2 invisible to Alice (Bob/Carol relationship).
+    _create_expenses(
+        client,
+        carol_token,
+        relationship_id=rel_bc["id"],
+        payer_user_id=carol["id"],
+        counterparty_id=bob["id"],
+        count=2,
+    )
+
+    body = client.get("/api/v1/expenses", headers=auth_headers(alice_token)).get_json()
+    assert body["total"] == 3
+    assert len(body["items"]) == 3

@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from flask import Blueprint, g, request
 
-from app.api._helpers import int_query_arg, json_body, translates_service_errors
+from app.api._helpers import (
+    int_query_arg,
+    json_body,
+    paginated_response,
+    pagination_args,
+    translates_service_errors,
+)
 from app.api._rate_limits import authed_write_limit
 from app.api._serializers import serialize_payment
 from app.auth.decorators import login_required
@@ -28,12 +34,15 @@ def create_payment():
 def list_payments():
     relationship_id = int_query_arg("relationship_id")
     status = request.args.get("status")
-    items = payments_service.list_for_user(
+    limit, offset = pagination_args()
+    items, total = payments_service.list_for_user(
         g.current_user,
         relationship_id=relationship_id,
         status=status,
+        limit=limit,
+        offset=offset,
     )
-    return {"items": [serialize_payment(p) for p in items]}, 200
+    return paginated_response([serialize_payment(p) for p in items], total, limit, offset), 200
 
 
 @payments_bp.get("/<int:payment_id>")
