@@ -8,11 +8,17 @@ from flask import Blueprint, g, request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.api._rate_limits import (
+    login_ip_limit,
+    login_username_limit,
+    register_limit,
+)
 from app.auth.decorators import login_required
 from app.auth.security import (
     generate_token,
     hash_password,
     hash_token,
+    verify_dummy_password,
     verify_password,
 )
 from app.errors import error_response
@@ -30,6 +36,7 @@ def _json_body() -> dict | None:
 
 
 @auth_bp.post("/register")
+@register_limit()
 def register():
     data = _json_body()
     if data is None:
@@ -65,6 +72,8 @@ def register():
 
 
 @auth_bp.post("/login")
+@login_ip_limit()
+@login_username_limit()
 def login():
     data = _json_body()
     if data is None:
@@ -76,7 +85,14 @@ def login():
         return error_response(401, "invalid_credentials", "Invalid username or password.")
 
     user = db.session.execute(select(User).where(User.username == username)).scalar_one_or_none()
-    if user is None or not verify_password(user.password_hash, password):
+    if user is None:
+        # Username does not exist. Run argon2 verify against a dummy
+        # hash anyway so this branch has the same wall-clock cost as
+        # the "wrong password" branch — defeats username enumeration
+        # by response-time analysis.
+        verify_dummy_password(password)
+        return error_response(401, "invalid_credentials", "Invalid username or password.")
+    if not verify_password(user.password_hash, password):
         return error_response(401, "invalid_credentials", "Invalid username or password.")
 
     raw_token = generate_token()

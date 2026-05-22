@@ -25,8 +25,11 @@ testing, and the example `curl` flow.
 
 ## Status
 
-Phase 2 complete on the backend: auth, health, relationships, expenses,
-payments, and balance computation are all wired up and exercised end to
-end. Remaining backend work is hardening (DB-level immutability
-triggers, rate limiting, etc.); the Android client is still a Phase 5+
+Phase 3 complete on the backend: on top of the Phase 1/2 auth + ledger
++ balance work, the backend now installs DB-level immutability
+triggers on every ledger table, rate-limits the auth and authed write
+endpoints via Flask-Limiter (with a `Retry-After` header and a
+standard JSON envelope on 429), and equalises login response timing
+between the "unknown username" and "wrong password" branches to
+defeat username enumeration. The Android client is still a Phase 5+
 placeholder.

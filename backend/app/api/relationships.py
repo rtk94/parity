@@ -5,6 +5,7 @@ from __future__ import annotations
 from flask import Blueprint, g, request
 
 from app.api._helpers import json_body, translates_service_errors
+from app.api._rate_limits import authed_write_limit
 from app.api._serializers import (
     serialize_balance_view,
     serialize_relationship,
@@ -18,6 +19,7 @@ relationships_bp = Blueprint("relationships", __name__, url_prefix="/api/v1/rela
 
 @relationships_bp.post("")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def invite():
     rel = relationships_service.invite_by_username(g.current_user, json_body())
@@ -43,6 +45,7 @@ def get_relationship(relationship_id: int):
 
 @relationships_bp.post("/<int:relationship_id>/accept")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def accept_relationship(relationship_id: int):
     rel = relationships_service.accept(g.current_user, relationship_id)
@@ -51,6 +54,7 @@ def accept_relationship(relationship_id: int):
 
 @relationships_bp.post("/<int:relationship_id>/reject")
 @login_required
+@authed_write_limit()
 @translates_service_errors
 def reject_relationship(relationship_id: int):
     rel = relationships_service.reject(g.current_user, relationship_id)

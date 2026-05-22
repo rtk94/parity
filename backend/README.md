@@ -4,10 +4,10 @@ The backend for **Parity** — a self-hosted, two-party expense and payment
 tracking ledger. This package exposes a Flask REST API; an Android client
 will consume it in a later phase.
 
-Through **Phase 2**, the backend covers auth, relationships, expenses,
-payments, and balance computation. The remaining roadmap is hardening
-(DB-level immutability triggers, rate limiting, etc.) and the Android
-client.
+Through **Phase 3**, the backend covers auth, relationships, expenses,
+payments, balance computation, and the hardening pass (DB-level
+immutability triggers, request rate limiting, login response-timing
+equalisation). The Android client is the remaining roadmap item.
 
 ## Requirements
 
@@ -43,9 +43,10 @@ flask db upgrade
 ```
 
 This creates `backend/instance/parity.db` with the full schema (Phase 1
-initial migration plus the Phase 2 migration that renames the
-relationship party columns, adds the `rejected` status, and installs
-the partial expression unique index).
+initial migration, the Phase 2 migration that renames the relationship
+party columns, adds the `rejected` status, and installs the partial
+expression unique index, and the Phase 3 migration that installs the
+immutability triggers on the ledger tables).
 
 ## Run the server
 
@@ -185,12 +186,64 @@ curl -s http://localhost:5000/api/v1/health
 # -> {"status":"ok","database":"ok"}
 ```
 
+## Database integrity
+
+Phase 3 installs a set of SQLite triggers as a DB-level backstop for
+the ledger invariants the service layer already enforces. The triggers
+are not expected to fire under normal operation; their value is
+catching service-layer bugs and preventing damage from direct SQL.
+
+| Trigger | Fires when |
+| ------- | ---------- |
+| `trg_expense_no_delete`                 | Any `DELETE` on `expense`. |
+| `trg_expense_no_update_terminal`        | Any `UPDATE` on a non-`pending` `expense`. |
+| `trg_expense_immutable_columns`         | Any `UPDATE` to `payer_user_id`, `relationship_id`, `total_cents`, `description`, `created_by_user_id`, `created_at`, or `reverses_expense_id` on `expense`. |
+| `trg_expense_share_no_update`           | Any `UPDATE` on `expense_share`. |
+| `trg_expense_share_no_delete`           | Any `DELETE` on `expense_share`. |
+| `trg_payment_no_delete`                 | Any `DELETE` on `payment`. |
+| `trg_payment_no_update_terminal`        | Any `UPDATE` on a non-`pending` `payment`. |
+| `trg_payment_immutable_columns`         | Any `UPDATE` to `from_user_id`, `to_user_id`, `relationship_id`, `amount_cents`, `description`, `created_by_user_id`, `created_at`, or `reverses_payment_id` on `payment`. |
+| `trg_relationship_no_delete`            | Any `DELETE` on `relationship`. |
+| `trg_relationship_no_update_terminal`   | Any `UPDATE` on a non-`pending` `relationship`. |
+| `trg_relationship_immutable_columns`    | Any `UPDATE` to `inviting_user_id`, `invited_user_id`, or `created_at` on `relationship`. |
+
+The legitimate `pending → confirmed` and `pending → discarded`
+transitions (touching only `status`, the timestamp, and the actor
+columns) are unaffected. Re-invites after a rejection still work
+through `INSERT`, because rejection rows are terminal but `INSERT` is
+not gated by any trigger.
+
+Trigger errors surface to SQLAlchemy as `IntegrityError` and propagate
+back as HTTP 500 — they're a bug indicator, not a routine code path.
+
+## Environment variables
+
+Read at app startup via `os.environ`. The defaults are tuned for a
+single self-hosted instance.
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `SECRET_KEY`                | _(required)_      | Flask session secret. |
+| `DATABASE_URL`              | `sqlite:///parity.db` | SQLAlchemy URI; relative SQLite paths land under `backend/instance/`. |
+| `FLASK_ENV`                 | `development`     | Selects `Development`/`Testing`/`Production` config class. |
+| `RATELIMIT_STORAGE_URI`     | `memory://`       | Flask-Limiter storage backend. In-process is sufficient for a single instance. |
+| `RATELIMIT_LOGIN_IP`        | `5 per minute`    | Per remote IP cap on `POST /auth/login`. |
+| `RATELIMIT_LOGIN_USERNAME`  | `20 per hour`     | Per `username` cap on `POST /auth/login` — defeats credential-stuffing against a single account from rotating IPs. |
+| `RATELIMIT_REGISTER`        | `5 per hour`      | Per remote IP cap on `POST /auth/register`. |
+| `RATELIMIT_WRITE`           | `60 per minute`   | Per authenticated user cap on all `POST` endpoints under `relationships`, `expenses`, and `payments`. |
+
+`GET` endpoints are not rate-limited. Hitting any limit returns HTTP
+429 with the standard error envelope (`code: "rate_limited"`, plus
+`details.limit` carrying the human-readable limit string) and a
+`Retry-After` header.
+
 ## Design notes
 
 - **Immutable ledger.** Confirmed expenses and payments are never edited
   or deleted; corrections are reversing entries that reference the
-  original via `reverses_*_id`. Enforcement is application-layer in v1;
-  DB triggers come in a later hardening pass.
+  original via `reverses_*_id`. Enforcement is application-layer in the
+  service code, with DB-level triggers (Phase 3) as a backstop — see
+  "Database integrity" above.
 - **Two-party confirmation.** Entries are `pending` until the counterparty
   confirms; pending entries do not affect balance.
 - **N-party future-proof, two-party UX.** The schema supports many users
