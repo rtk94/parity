@@ -4,10 +4,14 @@ The backend for **Parity** — a self-hosted, two-party expense and payment
 tracking ledger. This package exposes a Flask REST API; an Android client
 will consume it in a later phase.
 
-Through **Phase 3**, the backend covers auth, relationships, expenses,
-payments, balance computation, and the hardening pass (DB-level
-immutability triggers, request rate limiting, login response-timing
-equalisation). The Android client is the remaining roadmap item.
+Through **Phase 4**, the backend covers auth (with password change,
+token refresh, and idle + absolute token expiry), relationships
+(including the bundled invite + first-expense flow and cascade discard
+on rejection), expenses, payments, balance computation, paginated list
+endpoints, the Phase 3 hardening pass (DB-level immutability triggers,
+request rate limiting, login response-timing equalisation), and rate
+limits on the new auth endpoints. The Android client is the remaining
+roadmap item.
 
 ## Requirements
 
@@ -45,8 +49,9 @@ flask db upgrade
 This creates `backend/instance/parity.db` with the full schema (Phase 1
 initial migration, the Phase 2 migration that renames the relationship
 party columns, adds the `rejected` status, and installs the partial
-expression unique index, and the Phase 3 migration that installs the
-immutability triggers on the ledger tables).
+expression unique index, the Phase 3 migration that installs the
+immutability triggers on the ledger tables, and the Phase 4 migration
+that adds an `expires_at` column to `auth_token`).
 
 ## Run the server
 
@@ -83,21 +88,23 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 | `POST` | `/auth/register` | Create a user. |
 | `POST` | `/auth/login` | Exchange credentials for a bearer token. |
 | `POST` | `/auth/logout` | Revoke the calling token. |
+| `POST` | `/auth/refresh` | Issue a fresh token, revoke the request token. |
+| `POST` | `/auth/change-password` | Change the caller's password; revokes other sessions. |
 | `GET`  | `/auth/me` | Return the calling user. |
-| `POST` | `/relationships` | Invite another user by username. |
-| `GET`  | `/relationships?status=` | List relationships visible to the caller. |
+| `POST` | `/relationships` | Invite another user (optionally with a bundled first expense). |
+| `GET`  | `/relationships?status=&limit=&offset=` | List relationships visible to the caller. |
 | `GET`  | `/relationships/{id}` | Fetch one relationship. |
 | `POST` | `/relationships/{id}/accept` | Invited user accepts. |
-| `POST` | `/relationships/{id}/reject` | Either party rejects/withdraws. |
+| `POST` | `/relationships/{id}/reject` | Either party rejects/withdraws (cascade-discards pending expenses). |
 | `GET`  | `/relationships/{id}/balance` | Confirmed and projected balance. |
 | `POST` | `/expenses` | Create a pending expense with shares. |
-| `GET`  | `/expenses?relationship_id=&status=` | List expenses visible to the caller. |
+| `GET`  | `/expenses?relationship_id=&status=&limit=&offset=` | List expenses visible to the caller. |
 | `GET`  | `/expenses/{id}` | Fetch one expense with its shares. |
 | `POST` | `/expenses/{id}/confirm` | Counterparty confirms a pending expense. |
 | `POST` | `/expenses/{id}/discard` | Either party discards (optional `reason`). |
 | `POST` | `/expenses/{id}/reverse` | Create a pending reversal of a confirmed expense. |
 | `POST` | `/payments` | Create a pending payment. |
-| `GET`  | `/payments?relationship_id=&status=` | List payments visible to the caller. |
+| `GET`  | `/payments?relationship_id=&status=&limit=&offset=` | List payments visible to the caller. |
 | `GET`  | `/payments/{id}` | Fetch one payment. |
 | `POST` | `/payments/{id}/confirm` | Counterparty confirms a pending payment. |
 | `POST` | `/payments/{id}/discard` | Either party discards (optional `reason`). |
@@ -106,7 +113,8 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 ### Response envelope
 
 Single-resource successes return the resource object directly. Lists
-return `{"items": [...]}`. Errors use:
+return `{"items": [...], "total": N, "limit": L, "offset": O,
+"has_more": bool}`. Errors use:
 
 ```json
 {"error": {"code": "snake_case_identifier", "message": "...", "details": { }}}
@@ -115,6 +123,103 @@ return `{"items": [...]}`. Errors use:
 `details` is present only when it carries information beyond `message`
 (for example, `share_sum_mismatch` includes the offending totals).
 Timestamps are ISO 8601 with a `Z` suffix.
+
+The single exception to the single-resource rule is `POST
+/relationships` when the request includes `first_expense`: the
+response is a two-resource envelope `{"relationship": {...},
+"expense": {...}}` so the bundled invite + first expense flow can
+return both rows in one round trip.
+
+### Bundled invite + first expense
+
+`POST /relationships` accepts an optional `first_expense` field:
+
+```json
+{
+  "username": "bob",
+  "first_expense": {
+    "payer_user_id": 1,
+    "total_cents": 5000,
+    "description": "Lunch at Pat's",
+    "shares": [
+      {"user_id": 1, "amount_cents": 2500},
+      {"user_id": 2, "amount_cents": 2500}
+    ]
+  }
+}
+```
+
+When `first_expense` is present, the relationship and expense rows
+(plus shares) are inserted in a single transaction. A validation
+failure on the expense rolls back the relationship. The expense
+validations match the standalone `POST /expenses` codes; the only
+expense check skipped is the `relationship_not_accepted` 409, because
+the bundled relationship is freshly created and still pending.
+
+When `first_expense` is omitted, the endpoint behaves exactly as in
+Phase 2 and returns the relationship object directly.
+
+Rejecting a relationship cascade-discards any pending expenses still
+attached to it. The discarded rows carry `rejection_reason:
+"Relationship rejected"` and `discarded_by_user_id` set to the
+rejecter; confirmed expenses are never affected (they cannot exist on
+a non-accepted relationship anyway).
+
+### Pagination
+
+`GET /relationships`, `GET /expenses`, and `GET /payments` accept
+`limit` (default 50, range `[1, 200]`) and `offset` (default 0, must
+be `>= 0`). Both compose with the existing `status` and
+`relationship_id` filters. Out-of-range or non-integer values return
+`422 invalid_pagination` with `details: {"parameter": "<limit |
+offset>", "value": "<as-supplied>"}`.
+
+Response fields:
+
+- `items` — the page of serialised rows in the existing per-row shape.
+- `total` — count of rows matching the filters before pagination.
+- `limit`, `offset` — echoed back from the request (or the defaults).
+- `has_more` — `offset + len(items) < total`.
+
+Ordering is `created_at DESC, id DESC` on all three endpoints; the
+`id` tiebreaker keeps pages stable under concurrent inserts.
+
+### Password change
+
+`POST /auth/change-password` requires auth.
+
+```json
+{"current_password": "...", "new_password": "..."}
+```
+
+Returns `204 No Content` on success. The calling token stays alive;
+every other un-revoked token for the same user is revoked in the same
+transaction. Distinct 422 codes — `invalid_request` (missing fields),
+`weak_password` (new password under 8 chars, with
+`details.min_length`), and `invalid_current_password` — let a client
+show specific UI without inferring from the message.
+
+### Refresh
+
+`POST /auth/refresh` requires auth, takes no body, and returns the
+same envelope as `POST /auth/login`:
+
+```json
+{"token": "...", "user": {"id": ..., "username": "...", "display_name": "..."}}
+```
+
+The request's token is revoked in the same transaction that issues
+the new one. There is no automatic rotation on every authenticated
+request — refresh is explicit only.
+
+### Token expiration
+
+Every `auth_token` row carries an `expires_at` (the absolute hard
+cap, set to `created_at + TOKEN_ABSOLUTE_LIFETIME_DAYS` at insert)
+and a sliding idle window (`last_used_at + TOKEN_IDLE_LIFETIME_DAYS`).
+A request that fails either check returns `401 token_expired`;
+unknown, malformed, or revoked tokens continue to return
+`401 unauthorized` as in Phases 1–3.
 
 ## Example curl flow
 
@@ -223,14 +328,18 @@ single self-hosted instance.
 
 | Variable | Default | Purpose |
 | -------- | ------- | ------- |
-| `SECRET_KEY`                | _(required)_      | Flask session secret. |
-| `DATABASE_URL`              | `sqlite:///parity.db` | SQLAlchemy URI; relative SQLite paths land under `backend/instance/`. |
-| `FLASK_ENV`                 | `development`     | Selects `Development`/`Testing`/`Production` config class. |
-| `RATELIMIT_STORAGE_URI`     | `memory://`       | Flask-Limiter storage backend. In-process is sufficient for a single instance. |
-| `RATELIMIT_LOGIN_IP`        | `5 per minute`    | Per remote IP cap on `POST /auth/login`. |
-| `RATELIMIT_LOGIN_USERNAME`  | `20 per hour`     | Per `username` cap on `POST /auth/login` — defeats credential-stuffing against a single account from rotating IPs. |
-| `RATELIMIT_REGISTER`        | `5 per hour`      | Per remote IP cap on `POST /auth/register`. |
-| `RATELIMIT_WRITE`           | `60 per minute`   | Per authenticated user cap on all `POST` endpoints under `relationships`, `expenses`, and `payments`. |
+| `SECRET_KEY`                    | _(required)_      | Flask session secret. |
+| `DATABASE_URL`                  | `sqlite:///parity.db` | SQLAlchemy URI; relative SQLite paths land under `backend/instance/`. |
+| `FLASK_ENV`                     | `development`     | Selects `Development`/`Testing`/`Production` config class. |
+| `RATELIMIT_STORAGE_URI`         | `memory://`       | Flask-Limiter storage backend. In-process is sufficient for a single instance. |
+| `RATELIMIT_LOGIN_IP`            | `5 per minute`    | Per remote IP cap on `POST /auth/login`. |
+| `RATELIMIT_LOGIN_USERNAME`      | `20 per hour`     | Per `username` cap on `POST /auth/login` — defeats credential-stuffing against a single account from rotating IPs. |
+| `RATELIMIT_REGISTER`            | `5 per hour`      | Per remote IP cap on `POST /auth/register`. |
+| `RATELIMIT_WRITE`               | `60 per minute`   | Per authenticated user cap on all `POST` endpoints under `relationships`, `expenses`, and `payments`. |
+| `RATELIMIT_CHANGE_PASSWORD`     | `5 per hour`      | Per authenticated user cap on `POST /auth/change-password`. |
+| `RATELIMIT_REFRESH`             | `10 per hour`     | Per authenticated user cap on `POST /auth/refresh`. |
+| `TOKEN_ABSOLUTE_LIFETIME_DAYS`  | `365`             | Hard cap from a token's `created_at`. Past this, requests return `401 token_expired`. |
+| `TOKEN_IDLE_LIFETIME_DAYS`      | `30`              | Sliding cap from `last_used_at`. Past this without a successful request, the token expires. |
 
 `GET` endpoints are not rate-limited. Hitting any limit returns HTTP
 429 with the standard error envelope (`code: "rate_limited"`, plus

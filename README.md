@@ -25,11 +25,14 @@ testing, and the example `curl` flow.
 
 ## Status
 
-Phase 3 complete on the backend: on top of the Phase 1/2 auth + ledger
-+ balance work, the backend now installs DB-level immutability
-triggers on every ledger table, rate-limits the auth and authed write
-endpoints via Flask-Limiter (with a `Retry-After` header and a
-standard JSON envelope on 429), and equalises login response timing
-between the "unknown username" and "wrong password" branches to
-defeat username enumeration. The Android client is still a Phase 5+
-placeholder.
+Phase 4 complete on the backend. On top of the Phase 1/2/3 auth +
+ledger + balance + hardening work, the backend now supports a bundled
+invite + first-expense flow (the two rows land in one transaction;
+rejecting a relationship cascade-discards any pending expenses still
+attached), offset/limit pagination on `GET /relationships`,
+`GET /expenses`, and `GET /payments`, a `POST /auth/change-password`
+endpoint (calling session survives, other sessions revoked), and a
+token lifecycle pass: every `auth_token` row carries an `expires_at`
+absolute cap, the application also enforces a sliding idle window,
+and a new `POST /auth/refresh` endpoint swaps an active token for a
+fresh one. The Android client is still a Phase 5+ placeholder.

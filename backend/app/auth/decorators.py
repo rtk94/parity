@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from functools import wraps
 from typing import Any
 
-from flask import g, request
+from flask import current_app, g, request
 from sqlalchemy import select
 
 from app.auth.security import hash_token
@@ -24,8 +24,15 @@ def _extract_bearer_token() -> str | None:
     return raw or None
 
 
+def _as_utc(dt: datetime) -> datetime:
+    # SQLite returns naive datetimes even from ``DateTime(timezone=True)``
+    # columns. Treat naive values as UTC (the project invariant) so the
+    # comparisons below are timezone-aware on both sides.
+    return dt if dt.tzinfo is not None else dt.replace(tzinfo=UTC)
+
+
 def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
-    """Require a valid, unrevoked bearer token; populate flask.g.current_user."""
+    """Require a valid, unrevoked, unexpired bearer token; populate flask.g.current_user."""
 
     @wraps(view)
     def wrapper(*args: Any, **kwargs: Any):
@@ -48,7 +55,16 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
         if user is None:
             return error_response(401, "unauthorized", "Token user no longer exists.")
 
-        token.last_used_at = datetime.now(UTC)
+        now = datetime.now(UTC)
+        if _as_utc(token.expires_at) <= now:
+            return error_response(401, "token_expired", "Token has expired.")
+
+        idle_anchor = _as_utc(token.last_used_at or token.created_at)
+        idle_deadline = idle_anchor + timedelta(days=current_app.config["TOKEN_IDLE_LIFETIME_DAYS"])
+        if idle_deadline <= now:
+            return error_response(401, "token_expired", "Token has expired.")
+
+        token.last_used_at = now
         db.session.commit()
 
         g.current_user = user

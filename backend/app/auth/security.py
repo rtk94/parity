@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import hashlib
 import secrets
+from datetime import UTC, datetime, timedelta
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
+from flask import current_app
 
 _hasher = PasswordHasher()
 
@@ -55,3 +57,10 @@ def generate_token() -> str:
 def hash_token(raw_token: str) -> str:
     """SHA-256 hex digest of a raw bearer token."""
     return hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+
+def token_absolute_expiry(created_at: datetime) -> datetime:
+    """Compute ``expires_at`` for a token created at ``created_at``."""
+    days = current_app.config["TOKEN_ABSOLUTE_LIFETIME_DAYS"]
+    base = created_at if created_at.tzinfo is not None else created_at.replace(tzinfo=UTC)
+    return base + timedelta(days=days)
