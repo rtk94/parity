@@ -61,6 +61,7 @@ def make_relationship(
     *,
     accept: bool = True,
     invitee_password: str | None = None,
+    currency_code: str = "USD",
 ) -> dict[str, Any]:
     """Invite ``invitee_username`` from the inviter; optionally accept it.
 
@@ -68,7 +69,7 @@ def make_relationship(
     """
     invite_resp = client.post(
         "/api/v1/relationships",
-        json={"username": invitee_username},
+        json={"username": invitee_username, "currency_code": currency_code},
         headers=auth_headers(inviter_token),
     )
     assert invite_resp.status_code == 201, invite_resp.get_json()

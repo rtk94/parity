@@ -11,6 +11,7 @@ from sqlalchemy import (
     Enum,
     ForeignKey,
     Index,
+    String,
     func,
     text,
 )
@@ -33,6 +34,10 @@ class Relationship(db.Model):
             "inviting_user_id != invited_user_id",
             name="ck_relationship_distinct_parties",
         ),
+        CheckConstraint(
+            "currency_code GLOB '[A-Z][A-Z][A-Z]'",
+            name="ck_relationship_currency_format",
+        ),
         Index(
             "uq_relationship_user_pair",
             text("MIN(inviting_user_id, invited_user_id)"),
@@ -51,6 +56,7 @@ class Relationship(db.Model):
         default=RelationshipStatus.pending,
         server_default=RelationshipStatus.pending.value,
     )
+    currency_code: Mapped[str] = mapped_column(String(3), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 from flask import Flask
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.security import hash_password
@@ -35,11 +36,13 @@ def _make_relationship(
     invited: User,
     *,
     status: RelationshipStatus = RelationshipStatus.accepted,
+    currency_code: str = "USD",
 ) -> Relationship:
     rel = Relationship(
         inviting_user_id=inviting.id,
         invited_user_id=invited.id,
         status=status,
+        currency_code=currency_code,
     )
     db.session.add(rel)
     db.session.commit()
@@ -55,7 +58,7 @@ def test_user_can_be_created(app: Flask) -> None:
 
 def test_relationship_check_rejects_self_invite(app: Flask) -> None:
     a = _make_user("alice")
-    rel = Relationship(inviting_user_id=a.id, invited_user_id=a.id)
+    rel = Relationship(inviting_user_id=a.id, invited_user_id=a.id, currency_code="USD")
     db.session.add(rel)
     with pytest.raises(IntegrityError):
         db.session.commit()
@@ -71,6 +74,7 @@ def test_relationship_unique_blocks_same_direction_duplicate(app: Flask) -> None
         inviting_user_id=a.id,
         invited_user_id=b.id,
         status=RelationshipStatus.pending,
+        currency_code="USD",
     )
     db.session.add(dup)
     with pytest.raises(IntegrityError):
@@ -89,6 +93,7 @@ def test_relationship_partial_index_blocks_inverse_direction_duplicate(
         inviting_user_id=b.id,
         invited_user_id=a.id,
         status=RelationshipStatus.pending,
+        currency_code="USD",
     )
     db.session.add(inverse)
     with pytest.raises(IntegrityError):
@@ -108,6 +113,7 @@ def test_relationship_partial_index_allows_reinvite_after_rejection(
         inviting_user_id=a.id,
         invited_user_id=b.id,
         status=RelationshipStatus.pending,
+        currency_code="USD",
     )
     db.session.add(reinvite)
     db.session.commit()
@@ -121,10 +127,70 @@ def test_relationship_partial_index_allows_reinvite_after_rejection(
         inviting_user_id=b.id,
         invited_user_id=a.id,
         status=RelationshipStatus.pending,
+        currency_code="USD",
     )
     db.session.add(inverse)
     db.session.commit()
     assert inverse.id is not None
+
+
+# --- Phase 5: currency_code ------------------------------------------
+
+
+def test_relationship_can_be_created_with_valid_currency_code(app: Flask) -> None:
+    a = _make_user("alice")
+    b = _make_user("bob")
+    rel = _make_relationship(a, b, currency_code="EUR")
+    assert rel.id is not None
+    assert rel.currency_code == "EUR"
+
+
+def test_relationship_currency_check_rejects_lowercase(app: Flask) -> None:
+    a = _make_user("alice")
+    b = _make_user("bob")
+    with pytest.raises(IntegrityError):
+        db.session.execute(
+            text(
+                "INSERT INTO relationship "
+                "(inviting_user_id, invited_user_id, status, currency_code) "
+                "VALUES (:i, :v, 'pending', 'usd')"
+            ),
+            {"i": a.id, "v": b.id},
+        )
+        db.session.commit()
+    db.session.rollback()
+
+
+def test_relationship_currency_check_rejects_non_letters(app: Flask) -> None:
+    a = _make_user("alice")
+    b = _make_user("bob")
+    with pytest.raises(IntegrityError):
+        db.session.execute(
+            text(
+                "INSERT INTO relationship "
+                "(inviting_user_id, invited_user_id, status, currency_code) "
+                "VALUES (:i, :v, 'pending', 'U$D')"
+            ),
+            {"i": a.id, "v": b.id},
+        )
+        db.session.commit()
+    db.session.rollback()
+
+
+def test_relationship_currency_check_rejects_wrong_length(app: Flask) -> None:
+    a = _make_user("alice")
+    b = _make_user("bob")
+    with pytest.raises(IntegrityError):
+        db.session.execute(
+            text(
+                "INSERT INTO relationship "
+                "(inviting_user_id, invited_user_id, status, currency_code) "
+                "VALUES (:i, :v, 'pending', 'US')"
+            ),
+            {"i": a.id, "v": b.id},
+        )
+        db.session.commit()
+    db.session.rollback()
 
 
 def test_expense_check_rejects_self_confirmation(app: Flask) -> None:
