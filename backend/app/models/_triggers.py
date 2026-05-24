@@ -11,15 +11,18 @@ application operation.
 
 The triggers live in two places — kept deliberately in sync:
 
-1. ``TRIGGER_STATEMENTS`` below is installed on every fresh schema via
-   the SQLAlchemy ``after_create`` listener registered at the bottom of
-   this module. ``db.create_all()`` (used by the test fixture) walks
-   ``metadata.create_all`` which fires the listener, so trigger tests
-   exercise the real DDL.
-2. The Alembic immutability-triggers migration imports the same
-   constants and emits the same statements via ``op.execute`` so a
-   production database upgraded through migrations ends up with an
-   identical schema.
+1. ``TRIGGER_STATEMENTS`` plus any later evolutions (currently
+   ``PHASE5_TRIGGER_EVOLUTION``) are installed on every fresh schema
+   via the SQLAlchemy ``after_create`` listener registered at the
+   bottom of this module. ``db.create_all()`` (used by the test
+   fixture) walks ``metadata.create_all`` which fires the listener, so
+   trigger tests exercise the real DDL.
+2. The Alembic immutability-triggers migration imports
+   ``TRIGGER_STATEMENTS`` and emits those statements via
+   ``op.execute``. Later phases (Phase 5+) self-contain their trigger
+   evolutions inside the relevant migration. ``TRIGGER_STATEMENTS`` is
+   frozen as the Phase 3 snapshot so the Phase 3 migration stays
+   correct on a fresh database upgrade.
 
 If you change a trigger here you must write a new migration that drops
 the old triggers and re-creates them; the model layer and the migration
@@ -167,6 +170,29 @@ TRIGGER_STATEMENTS: list[str] = [
 ]
 
 
+# Phase 5 evolved ``trg_relationship_immutable_columns`` to also
+# protect ``currency_code``. The migration that adds the column drops
+# the Phase 3 trigger and re-creates it with the wider WHEN clause;
+# the same drop-and-recreate runs here so a fresh schema built via
+# ``db.create_all()`` ends up with the current trigger shape.
+PHASE5_TRIGGER_EVOLUTION: list[str] = [
+    "DROP TRIGGER IF EXISTS trg_relationship_immutable_columns",
+    """
+    CREATE TRIGGER trg_relationship_immutable_columns
+    BEFORE UPDATE ON relationship
+    FOR EACH ROW
+    WHEN
+        NEW.inviting_user_id IS NOT OLD.inviting_user_id
+        OR NEW.invited_user_id IS NOT OLD.invited_user_id
+        OR NEW.created_at IS NOT OLD.created_at
+        OR NEW.currency_code IS NOT OLD.currency_code
+    BEGIN
+        SELECT RAISE(ABORT, 'relationship_immutable: protected column changed');
+    END
+    """,
+]
+
+
 # Drop statements in reverse creation order so a downgrade tears
 # triggers down in the same shape as a fresh create-then-drop would.
 TRIGGER_NAMES_REVERSED: list[str] = [
@@ -200,6 +226,8 @@ def _install_triggers_on_create(
     if connection.dialect.name != "sqlite":
         return
     for stmt in TRIGGER_STATEMENTS:
+        connection.execute(text(stmt))
+    for stmt in PHASE5_TRIGGER_EVOLUTION:
         connection.execute(text(stmt))
 
 

@@ -4,13 +4,14 @@ The backend for **Parity** — a self-hosted, two-party expense and payment
 tracking ledger. This package exposes a Flask REST API; an Android client
 will consume it in a later phase.
 
-Through **Phase 4**, the backend covers auth (with password change,
+Through **Phase 5**, the backend covers auth (with password change,
 token refresh, and idle + absolute token expiry), relationships
-(including the bundled invite + first-expense flow and cascade discard
-on rejection), expenses, payments, balance computation, paginated list
-endpoints, the Phase 3 hardening pass (DB-level immutability triggers,
-request rate limiting, login response-timing equalisation), and rate
-limits on the new auth endpoints. The Android client is the remaining
+(including a required per-relationship `currency_code`, the bundled
+invite + first-expense flow, and cascade discard on rejection),
+expenses, payments, balance computation, paginated list endpoints,
+the Phase 3 hardening pass (DB-level immutability triggers, request
+rate limiting, login response-timing equalisation), and rate limits
+on the new auth endpoints. The Android client is the remaining
 roadmap item.
 
 ## Requirements
@@ -50,8 +51,10 @@ This creates `backend/instance/parity.db` with the full schema (Phase 1
 initial migration, the Phase 2 migration that renames the relationship
 party columns, adds the `rejected` status, and installs the partial
 expression unique index, the Phase 3 migration that installs the
-immutability triggers on the ledger tables, and the Phase 4 migration
-that adds an `expires_at` column to `auth_token`).
+immutability triggers on the ledger tables, the Phase 4 migration
+that adds an `expires_at` column to `auth_token`, and the Phase 5
+migration that adds the required `currency_code` column to
+`relationship` and extends the relationship immutability trigger).
 
 ## Run the server
 
@@ -130,13 +133,23 @@ response is a two-resource envelope `{"relationship": {...},
 "expense": {...}}` so the bundled invite + first expense flow can
 return both rows in one round trip.
 
-### Bundled invite + first expense
+### Invite
 
-`POST /relationships` accepts an optional `first_expense` field:
+`POST /relationships` requires `username` and `currency_code` in the
+body. `currency_code` must match `^[A-Z]{3}$` (three uppercase ASCII
+letters); the server does not enforce ISO 4217 membership beyond
+format — the client is responsible for offering a curated list. The
+currency is fixed at relationship creation: every expense and payment
+on the relationship is in that currency, there is no per-entry
+override, and the column is immutable once written (enforced both by
+the application and by a DB trigger).
+
+`first_expense` is an optional field on the same request:
 
 ```json
 {
   "username": "bob",
+  "currency_code": "USD",
   "first_expense": {
     "payer_user_id": 1,
     "total_cents": 5000,
@@ -149,6 +162,10 @@ return both rows in one round trip.
 }
 ```
 
+A missing or null `currency_code` returns `400 bad_request`; a
+present-but-malformed value returns `422 invalid_currency_code` with
+`details.value` echoing the supplied string.
+
 When `first_expense` is present, the relationship and expense rows
 (plus shares) are inserted in a single transaction. A validation
 failure on the expense rolls back the relationship. The expense
@@ -156,8 +173,8 @@ validations match the standalone `POST /expenses` codes; the only
 expense check skipped is the `relationship_not_accepted` 409, because
 the bundled relationship is freshly created and still pending.
 
-When `first_expense` is omitted, the endpoint behaves exactly as in
-Phase 2 and returns the relationship object directly.
+When `first_expense` is omitted, the endpoint returns the
+relationship object directly.
 
 Rejecting a relationship cascade-discards any pending expenses still
 attached to it. The discarded rows carry `rejection_reason:
@@ -242,7 +259,7 @@ B_TOK=$(curl -s -X POST $BASE/auth/login -H 'Content-Type: application/json' \
 
 # 3. Alice invites Bob; capture the relationship id.
 REL=$(curl -s -X POST $BASE/relationships -H 'Content-Type: application/json' \
-    -H "Authorization: Bearer $A_TOK" -d '{"username":"bob"}' \
+    -H "Authorization: Bearer $A_TOK" -d '{"username":"bob","currency_code":"USD"}' \
     | python -c 'import json,sys;print(json.load(sys.stdin)["id"])')
 
 # 4. Bob accepts.
@@ -310,7 +327,7 @@ catching service-layer bugs and preventing damage from direct SQL.
 | `trg_payment_immutable_columns`         | Any `UPDATE` to `from_user_id`, `to_user_id`, `relationship_id`, `amount_cents`, `description`, `created_by_user_id`, `created_at`, or `reverses_payment_id` on `payment`. |
 | `trg_relationship_no_delete`            | Any `DELETE` on `relationship`. |
 | `trg_relationship_no_update_terminal`   | Any `UPDATE` on a non-`pending` `relationship`. |
-| `trg_relationship_immutable_columns`    | Any `UPDATE` to `inviting_user_id`, `invited_user_id`, or `created_at` on `relationship`. |
+| `trg_relationship_immutable_columns`    | Any `UPDATE` to `inviting_user_id`, `invited_user_id`, `created_at`, or `currency_code` on `relationship`. |
 
 The legitimate `pending → confirmed` and `pending → discarded`
 transitions (touching only `status`, the timestamp, and the actor
