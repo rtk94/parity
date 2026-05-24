@@ -1,0 +1,169 @@
+package com.rknepp.parity.auth
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.google.crypto.tink.Aead
+import com.google.crypto.tink.KeyTemplates
+import com.google.crypto.tink.KeysetHandle
+import com.google.crypto.tink.aead.AeadConfig
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import com.rknepp.parity.auth.data.AuthApi
+import com.rknepp.parity.auth.data.AuthRepository
+import com.rknepp.parity.network.ApiResult
+import com.rknepp.parity.storage.SecureTokenStore
+import com.rknepp.parity.storage.TinkAeadProvider
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.mockwebserver.MockResponse
+import okhttp3.mockwebserver.MockWebServer
+import okhttp3.mockwebserver.SocketPolicy
+import org.junit.After
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Rule
+import org.junit.Test
+import org.junit.rules.TemporaryFolder
+import retrofit2.Retrofit
+
+class AuthRepositoryTest {
+
+    @get:Rule
+    val tempFolder = TemporaryFolder()
+
+    private lateinit var server: MockWebServer
+    private lateinit var tokenStore: SecureTokenStore
+    private lateinit var repo: AuthRepository
+
+    private val json = Json { ignoreUnknownKeys = true; explicitNulls = false }
+
+    @Before
+    fun setUp() {
+        AeadConfig.register()
+        server = MockWebServer().apply { start() }
+
+        val handle = KeysetHandle.generateNew(KeyTemplates.get("AES256_GCM"))
+        val aead = handle.getPrimitive(Aead::class.java)
+        val provider = object : TinkAeadProvider { override fun aead(): Aead = aead }
+        val dataStore: DataStore<Preferences> = PreferenceDataStoreFactory.create(
+            produceFile = { tempFolder.newFile("secure.preferences_pb") },
+        )
+        tokenStore = SecureTokenStore.forTesting(dataStore, provider)
+
+        val retrofit = Retrofit.Builder()
+            .baseUrl(server.url("/"))
+            .client(OkHttpClient.Builder().build())
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+        val api = retrofit.create(AuthApi::class.java)
+        repo = AuthRepository(authApiProvider = { api }, tokenStore = tokenStore)
+    }
+
+    @After
+    fun tearDown() {
+        server.shutdown()
+    }
+
+    @Test
+    fun loginSuccessStoresTokenAndReturnsUser() = runBlocking {
+        val body = """
+            {"token":"tok-123","user":{"id":1,"username":"alice","display_name":"Alice"}}
+        """.trimIndent()
+        server.enqueue(jsonResponse(200, body))
+
+        val result = repo.login("alice", "pw")
+
+        assertTrue(result is ApiResult.Success)
+        val user = (result as ApiResult.Success).data
+        assertEquals("alice", user.username)
+        assertEquals(1L, user.id)
+        assertEquals("tok-123", tokenStore.token.first())
+    }
+
+    @Test
+    fun loginBadCredentialsReturnsParsedHttpFailure() = runBlocking {
+        val body = """
+            {"error":{"code":"invalid_credentials","message":"Invalid username or password."}}
+        """.trimIndent()
+        server.enqueue(jsonResponse(401, body))
+
+        val result = repo.login("alice", "wrong")
+
+        assertTrue(result is ApiResult.HttpFailure)
+        val fail = result as ApiResult.HttpFailure
+        assertEquals(401, fail.code)
+        assertNotNull(fail.error)
+        assertEquals("invalid_credentials", fail.error?.code)
+        assertNull(tokenStore.token.first())
+    }
+
+    @Test
+    fun registerSuccessReturnsUser() = runBlocking {
+        val body = """{"id":7,"username":"carol","display_name":"Carol"}"""
+        server.enqueue(jsonResponse(201, body))
+
+        val result = repo.register("carol", "pw", "Carol")
+        assertTrue(result is ApiResult.Success)
+        assertEquals(7L, (result as ApiResult.Success).data.id)
+    }
+
+    @Test
+    fun registerConflictReturnsParsedUsernameTaken() = runBlocking {
+        val body = """
+            {"error":{"code":"username_taken","message":"Username is already taken."}}
+        """.trimIndent()
+        server.enqueue(jsonResponse(409, body))
+
+        val result = repo.register("carol", "pw", "Carol")
+        assertTrue(result is ApiResult.HttpFailure)
+        val fail = result as ApiResult.HttpFailure
+        assertEquals(409, fail.code)
+        assertEquals("username_taken", fail.error?.code)
+    }
+
+    @Test
+    fun logoutClearsTokenEvenOnBackendNetworkError() = runBlocking {
+        // Seed a token, then simulate network failure on the
+        // /auth/logout call.
+        tokenStore.set("seeded-token")
+        server.enqueue(MockResponse().setSocketPolicy(SocketPolicy.DISCONNECT_AT_START))
+
+        val result = repo.logout()
+
+        assertTrue(result is ApiResult.NetworkFailure)
+        assertNull(tokenStore.token.first())
+    }
+
+    @Test
+    fun verifyServerUrlSuccess() = runBlocking {
+        server.enqueue(jsonResponse(200, """{"status":"ok","database":"ok"}"""))
+        val result = repo.verifyServerUrl(server.url("/").toString().trimEnd('/'))
+        assertTrue(result is ApiResult.Success)
+        assertEquals("ok", (result as ApiResult.Success).data.status)
+    }
+
+    @Test
+    fun verifyServerUrlOnNonParityResponseSurfacesFailure() = runBlocking {
+        // 200 but the body doesn't match HealthResponse. With
+        // ignoreUnknownKeys = true and missing required fields,
+        // kotlinx.serialization throws — mapped to UnexpectedFailure.
+        server.enqueue(jsonResponse(200, """{"unrelated":"thing"}"""))
+        val result = repo.verifyServerUrl(server.url("/").toString().trimEnd('/'))
+        assertTrue(
+            "expected UnexpectedFailure, got $result",
+            result is ApiResult.UnexpectedFailure,
+        )
+    }
+
+    private fun jsonResponse(code: Int, body: String): MockResponse =
+        MockResponse()
+            .setResponseCode(code)
+            .setHeader("Content-Type", "application/json")
+            .setBody(body)
+}

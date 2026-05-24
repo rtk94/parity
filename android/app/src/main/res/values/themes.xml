@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Material 3 dynamic colors / DayNight defaults are applied in the
+      Compose theme. This Android-style theme exists so the launch
+      window has a sensible status-bar color before the first frame.
+    -->
+    <style name="Theme.Parity" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

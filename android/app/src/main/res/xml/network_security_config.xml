@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Self-hosted Parity servers commonly run on LAN addresses or with
+  self-signed certificates. Allow cleartext so the user can point the
+  app at their own deployment. Phase 9 may add a UX warning when the
+  configured server URL is plaintext.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
