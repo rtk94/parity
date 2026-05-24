@@ -33,6 +33,7 @@ def serialize_relationship(rel: Relationship) -> dict[str, Any]:
         "inviting_user": serialize_user_brief(rel.inviting_user),
         "invited_user": serialize_user_brief(rel.invited_user),
         "status": rel.status.value,
+        "currency_code": rel.currency_code,
         "created_at": iso8601_z(rel.created_at),
     }
 

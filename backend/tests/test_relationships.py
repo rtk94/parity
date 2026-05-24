@@ -19,7 +19,7 @@ def test_invite_by_username_succeeds(client: FlaskClient) -> None:
 
     response = client.post(
         "/api/v1/relationships",
-        json={"username": "bob"},
+        json={"username": "bob", "currency_code": "USD"},
         headers=auth_headers(alice_token),
     )
 
@@ -37,6 +37,7 @@ def test_invite_by_username_succeeds(client: FlaskClient) -> None:
         "display_name": "Bob",
     }
     assert body["status"] == "pending"
+    assert body["currency_code"] == "USD"
     assert body["created_at"].endswith("Z")
 
 
@@ -45,7 +46,7 @@ def test_invite_nonexistent_username_returns_404(client: FlaskClient) -> None:
 
     response = client.post(
         "/api/v1/relationships",
-        json={"username": "nobody"},
+        json={"username": "nobody", "currency_code": "USD"},
         headers=auth_headers(alice_token),
     )
 
@@ -53,12 +54,157 @@ def test_invite_nonexistent_username_returns_404(client: FlaskClient) -> None:
     assert response.get_json()["error"]["code"] == "user_not_found"
 
 
+# --- currency_code validation ----------------------------------------
+
+
+def test_invite_missing_currency_code_returns_400(client: FlaskClient) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob"},
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "bad_request"
+
+
+def test_invite_null_currency_code_returns_400(client: FlaskClient) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob", "currency_code": None},
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["error"]["code"] == "bad_request"
+
+
+def test_invite_wrong_length_currency_code_returns_422(client: FlaskClient) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob", "currency_code": "US"},
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 422
+    body = response.get_json()["error"]
+    assert body["code"] == "invalid_currency_code"
+    assert body["details"] == {"value": "US"}
+
+
+def test_invite_lowercase_currency_code_returns_422(client: FlaskClient) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob", "currency_code": "usd"},
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 422
+    body = response.get_json()["error"]
+    assert body["code"] == "invalid_currency_code"
+    assert body["details"] == {"value": "usd"}
+
+
+def test_invite_non_letter_currency_code_returns_422(client: FlaskClient) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob", "currency_code": "U$D"},
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 422
+    body = response.get_json()["error"]
+    assert body["code"] == "invalid_currency_code"
+    assert body["details"] == {"value": "U$D"}
+
+
+def test_bundled_invite_carries_currency_through_response(client: FlaskClient) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    bob = make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={
+            "username": "bob",
+            "currency_code": "EUR",
+            "first_expense": {
+                "payer_user_id": alice["id"],
+                "total_cents": 1000,
+                "description": "Lunch",
+                "shares": [
+                    {"user_id": alice["id"], "amount_cents": 500},
+                    {"user_id": bob["id"], "amount_cents": 500},
+                ],
+            },
+        },
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 201
+    body = response.get_json()
+    assert body["relationship"]["currency_code"] == "EUR"
+    # The inner expense object does not gain a currency field.
+    assert "currency_code" not in body["expense"]
+
+
+def test_reinvite_after_rejection_with_different_currency_succeeds(
+    client: FlaskClient,
+) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    _, bob_token = make_logged_in_user(client, "bob")
+    rel = make_relationship(client, alice_token, "bob", accept=False, currency_code="USD")
+    reject_resp = client.post(
+        f"/api/v1/relationships/{rel['id']}/reject",
+        headers=auth_headers(bob_token),
+    )
+    assert reject_resp.status_code == 200
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob", "currency_code": "EUR"},
+        headers=auth_headers(alice_token),
+    )
+    assert response.status_code == 201
+    assert response.get_json()["currency_code"] == "EUR"
+
+
+def test_second_accepted_relationship_with_different_currency_returns_409(
+    client: FlaskClient,
+) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    _, _ = make_logged_in_user(client, "bob")
+    make_relationship(client, alice_token, "bob", accept=True, currency_code="USD")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={"username": "bob", "currency_code": "EUR"},
+        headers=auth_headers(alice_token),
+    )
+    assert response.status_code == 409
+    assert response.get_json()["error"]["code"] == "relationship_exists"
+
+
 def test_self_invite_returns_422(client: FlaskClient) -> None:
     _, alice_token = make_logged_in_user(client, "alice")
 
     response = client.post(
         "/api/v1/relationships",
-        json={"username": "alice"},
+        json={"username": "alice", "currency_code": "USD"},
         headers=auth_headers(alice_token),
     )
 
@@ -73,7 +219,7 @@ def test_same_direction_duplicate_invite_returns_409(client: FlaskClient) -> Non
 
     response = client.post(
         "/api/v1/relationships",
-        json={"username": "bob"},
+        json={"username": "bob", "currency_code": "USD"},
         headers=auth_headers(alice_token),
     )
 
@@ -88,7 +234,7 @@ def test_inverse_direction_duplicate_invite_returns_409(client: FlaskClient) -> 
 
     response = client.post(
         "/api/v1/relationships",
-        json={"username": "alice"},
+        json={"username": "alice", "currency_code": "USD"},
         headers=auth_headers(bob_token),
     )
 
@@ -111,7 +257,7 @@ def test_reinvite_after_rejection_succeeds(client: FlaskClient) -> None:
     # Same direction re-invite works.
     same_dir = client.post(
         "/api/v1/relationships",
-        json={"username": "bob"},
+        json={"username": "bob", "currency_code": "USD"},
         headers=auth_headers(alice_token),
     )
     assert same_dir.status_code == 201
@@ -124,7 +270,7 @@ def test_reinvite_after_rejection_succeeds(client: FlaskClient) -> None:
 
     inverse_dir = client.post(
         "/api/v1/relationships",
-        json={"username": "alice"},
+        json={"username": "alice", "currency_code": "USD"},
         headers=auth_headers(bob_token),
     )
     assert inverse_dir.status_code == 201
@@ -278,8 +424,10 @@ def _bundled_invite(
     inviter_token: str,
     invitee_username: str,
     first_expense: dict | None,
+    *,
+    currency_code: str = "USD",
 ):
-    body: dict = {"username": invitee_username}
+    body: dict = {"username": invitee_username, "currency_code": currency_code}
     if first_expense is not None:
         body["first_expense"] = first_expense
     return client.post(
@@ -534,7 +682,7 @@ def test_relationships_pagination_default_and_subsequent_pages(client: FlaskClie
         make_user(client, f"user{i:02d}")
         resp = client.post(
             "/api/v1/relationships",
-            json={"username": f"user{i:02d}"},
+            json={"username": f"user{i:02d}", "currency_code": "USD"},
             headers=auth_headers(alice_token),
         )
         assert resp.status_code == 201
@@ -569,7 +717,7 @@ def test_relationships_pagination_filters_compose(client: FlaskClient) -> None:
         make_logged_in_user(client, username)
         resp = client.post(
             "/api/v1/relationships",
-            json={"username": username},
+            json={"username": username, "currency_code": "USD"},
             headers=auth_headers(alice_token),
         )
         assert resp.status_code == 201
