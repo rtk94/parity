@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Parity</string>
+
+    <!-- Connect screen -->
+    <string name="connect_title">Connect to your server</string>
+    <string name="connect_helper">Enter the URL of your Parity server, including https://</string>
+    <string name="connect_url_label">Server URL</string>
+    <string name="connect_button">Connect</string>
+    <string name="connect_error_invalid_url">Invalid URL.</string>
+    <string name="connect_error_bad_scheme">URL must start with http:// or https://</string>
+    <string name="connect_error_network">Cannot reach server.</string>
+    <string name="connect_error_unexpected">That URL does not look like a Parity server.</string>
+    <string name="connect_error_http">Server responded with an error (%1$d).</string>
+
+    <!-- Login screen -->
+    <string name="login_title">Sign in</string>
+    <string name="login_username_label">Username</string>
+    <string name="login_password_label">Password</string>
+    <string name="login_button">Sign in</string>
+    <string name="login_register_link">Create an account</string>
+    <string name="login_error_invalid_credentials">Invalid username or password.</string>
+    <string name="login_error_rate_limited">Too many attempts. Try again later.</string>
+    <string name="login_error_network">Cannot reach server.</string>
+    <string name="login_error_generic">Something went wrong. Please try again.</string>
+    <string name="login_session_expired_banner">Your session has expired. Please log in again.</string>
+
+    <!-- Register screen -->
+    <string name="register_title">Create your account</string>
+    <string name="register_username_label">Username</string>
+    <string name="register_password_label">Password</string>
+    <string name="register_display_name_label">Display name</string>
+    <string name="register_button">Register</string>
+    <string name="register_back_to_login">Back to sign in</string>
+    <string name="register_success">Account created. Please sign in.</string>
+    <string name="register_error_username_taken">Username already taken.</string>
+    <string name="register_error_network">Cannot reach server.</string>
+    <string name="register_error_generic">Something went wrong. Please try again.</string>
+
+    <!-- Home screen -->
+    <string name="home_title">Parity</string>
+    <string name="home_signed_in_as">Signed in as %1$s (@%2$s)</string>
+    <string name="home_placeholder">More features coming in the next phase.</string>
+    <string name="home_logout">Log out</string>
+    <string name="home_loading_error">Could not load your profile.</string>
+    <string name="home_logout_partial">Server logout failed; local session cleared.</string>
+</resources>
