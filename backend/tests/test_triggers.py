@@ -532,3 +532,17 @@ def test_delete_relationship_raises(client: FlaskClient, app: Flask) -> None:
 
     msg = _expect_integrity_error("DELETE FROM relationship WHERE id = :id", id=rel["id"])
     assert "relationship_immutable" in msg
+
+
+def test_update_pending_relationship_changing_currency_raises(
+    client: FlaskClient, app: Flask
+) -> None:
+    _, alice_token = make_logged_in_user(client, "alice")
+    _, _ = make_logged_in_user(client, "bob")
+    rel = make_relationship(client, alice_token, "bob", accept=False, currency_code="USD")
+
+    msg = _expect_integrity_error(
+        "UPDATE relationship SET currency_code = 'EUR' WHERE id = :id",
+        id=rel["id"],
+    )
+    assert "relationship_immutable" in msg

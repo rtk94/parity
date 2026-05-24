@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -18,6 +19,12 @@ from app.services import (
     ServiceError,
     ValidationError,
 )
+
+# Phase 5: the API accepts any three uppercase ASCII letters; the
+# Android client is responsible for offering a curated currency list.
+# The same pattern is enforced at the DB level via the
+# ck_relationship_currency_format CHECK constraint as a backstop.
+_CURRENCY_CODE_RE = re.compile(r"^[A-Z]{3}$")
 
 # Constant rejection reason stamped on pending expenses that get
 # cascade-discarded when their relationship is rejected. Surfaced to
@@ -45,6 +52,16 @@ def invite_by_username(
     if not isinstance(username, str) or not username.strip():
         raise BadRequestError(message="username is required.")
 
+    currency_code = payload.get("currency_code")
+    if not isinstance(currency_code, str) or not currency_code:
+        raise BadRequestError(message="currency_code is required.")
+    if not _CURRENCY_CODE_RE.match(currency_code):
+        raise ValidationError(
+            "invalid_currency_code",
+            "currency_code must be three uppercase ASCII letters.",
+            details={"value": currency_code},
+        )
+
     invitee = db.session.execute(
         select(User).where(User.username == username.strip())
     ).scalar_one_or_none()
@@ -66,6 +83,7 @@ def invite_by_username(
         inviting_user_id=inviter.id,
         invited_user_id=invitee.id,
         status=RelationshipStatus.pending,
+        currency_code=currency_code,
     )
     db.session.add(rel)
 

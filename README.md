@@ -25,14 +25,12 @@ testing, and the example `curl` flow.
 
 ## Status
 
-Phase 4 complete on the backend. On top of the Phase 1/2/3 auth +
-ledger + balance + hardening work, the backend now supports a bundled
-invite + first-expense flow (the two rows land in one transaction;
-rejecting a relationship cascade-discards any pending expenses still
-attached), offset/limit pagination on `GET /relationships`,
-`GET /expenses`, and `GET /payments`, a `POST /auth/change-password`
-endpoint (calling session survives, other sessions revoked), and a
-token lifecycle pass: every `auth_token` row carries an `expires_at`
-absolute cap, the application also enforces a sliding idle window,
-and a new `POST /auth/refresh` endpoint swaps an active token for a
-fresh one. The Android client is still a Phase 5+ placeholder.
+Phase 5 complete on the backend. On top of the Phase 1/2/3 auth +
+ledger + balance + hardening work and the Phase 4 onboarding +
+pagination + auth-lifecycle pass, every relationship now carries a
+required three-letter `currency_code` set at invite time and
+immutable thereafter (DB-level CHECK plus an extended immutability
+trigger). The currency context is per-relationship; there is no
+cross-currency math anywhere in the backend. The Android client is
+still a placeholder; deferred items across all phases are tracked in
+[`ROADMAP.md`](ROADMAP.md).
