@@ -203,8 +203,10 @@ ruff format --check .
 
 Match the established commit style: title `<topic>: <one-line summary>`,
 body in 2–4 paragraphs that explain *what* changed and *why*. Phase
-commits are titled `Phase N: <summary>`. Append the Co-Authored-By
-trailer for the agent that did the work.
+commits are titled `Phase N: <summary>`. Do **not** add any agent
+signature or attribution — no `Co-Authored-By` trailer, no "Generated
+with …" line, no tool/model footer. Commits and PRs carry no
+authorship attribution to any AI agent.
 
 Use a heredoc so multi-line formatting survives the shell:
 
@@ -215,8 +217,6 @@ Phase N: <summary>
 <paragraph 1: what / why>
 
 <paragraph 2: notable design choices, gotchas, test coverage>
-
-Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 EOF
 )"
 ```
@@ -236,8 +236,6 @@ gh pr create --base main --title "<title>" --body "$(cat <<'EOF'
 
 ## Test plan
 - [x] <checks you ran — pytest, ruff, manual curl flow, etc.>
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)
 EOF
 )"
 ```
