@@ -671,6 +671,262 @@ def test_accept_does_not_cascade_pending_expense(client: FlaskClient) -> None:
     assert confirm_resp.get_json()["status"] == "confirmed"
 
 
+# --- bundled invite + first payment ----------------------------------
+
+
+def _bundled_invite_payment(
+    client: FlaskClient,
+    inviter_token: str,
+    invitee_username: str,
+    first_payment: dict | None,
+    *,
+    currency_code: str = "USD",
+):
+    body: dict = {"username": invitee_username, "currency_code": currency_code}
+    if first_payment is not None:
+        body["first_payment"] = first_payment
+    return client.post(
+        "/api/v1/relationships",
+        json=body,
+        headers=auth_headers(inviter_token),
+    )
+
+
+def test_bundled_invite_creates_relationship_and_payment(client: FlaskClient) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    bob = make_user(client, "bob")
+
+    response = _bundled_invite_payment(
+        client,
+        alice_token,
+        "bob",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": bob["id"],
+            "amount_cents": 5000,
+            "description": "Paid you back",
+        },
+    )
+
+    assert response.status_code == 201
+    body = response.get_json()
+    assert set(body.keys()) == {"relationship", "payment"}
+    rel = body["relationship"]
+    payment = body["payment"]
+    assert rel["status"] == "pending"
+    assert rel["inviting_user"]["id"] == alice["id"]
+    assert rel["invited_user"]["id"] == bob["id"]
+    assert payment["relationship_id"] == rel["id"]
+    assert payment["status"] == "pending"
+    assert payment["from_user_id"] == alice["id"]
+    assert payment["to_user_id"] == bob["id"]
+    assert payment["amount_cents"] == 5000
+    assert payment["description"] == "Paid you back"
+    assert payment["created_by_user_id"] == alice["id"]
+    assert payment["reverses_payment_id"] is None
+
+
+def test_bundled_invite_payment_invalid_party_rolls_back_relationship(
+    client: FlaskClient,
+) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+    carol = make_user(client, "carol")
+
+    response = _bundled_invite_payment(
+        client,
+        alice_token,
+        "bob",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": carol["id"],
+            "amount_cents": 1000,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.get_json()["error"]["code"] == "invalid_party"
+
+    listing = client.get("/api/v1/relationships", headers=auth_headers(alice_token)).get_json()
+    assert listing["total"] == 0
+
+
+def test_bundled_invite_payment_same_parties_rolls_back_relationship(
+    client: FlaskClient,
+) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    make_user(client, "bob")
+
+    response = _bundled_invite_payment(
+        client,
+        alice_token,
+        "bob",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": alice["id"],
+            "amount_cents": 1000,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.get_json()["error"]["code"] == "same_parties"
+
+    listing = client.get("/api/v1/relationships", headers=auth_headers(alice_token)).get_json()
+    assert listing["total"] == 0
+
+
+def test_bundled_invite_payment_invalid_amount_rolls_back_relationship(
+    client: FlaskClient,
+) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    bob = make_user(client, "bob")
+
+    response = _bundled_invite_payment(
+        client,
+        alice_token,
+        "bob",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": bob["id"],
+            "amount_cents": 0,
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.get_json()["error"]["code"] == "invalid_amount"
+
+    listing = client.get("/api/v1/relationships", headers=auth_headers(alice_token)).get_json()
+    assert listing["total"] == 0
+
+
+def test_bundled_invite_payment_uses_phase2_invite_error_codes(client: FlaskClient) -> None:
+    """The Phase 2 invite validations still run first for the payment variant."""
+    alice, alice_token = make_logged_in_user(client, "alice")
+
+    self_invite = _bundled_invite_payment(
+        client,
+        alice_token,
+        "alice",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": 999,
+            "amount_cents": 100,
+        },
+    )
+    assert self_invite.status_code == 422
+    assert self_invite.get_json()["error"]["code"] == "cannot_invite_self"
+
+
+def test_bundled_invite_rejects_both_first_expense_and_first_payment(
+    client: FlaskClient,
+) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    bob = make_user(client, "bob")
+
+    response = client.post(
+        "/api/v1/relationships",
+        json={
+            "username": "bob",
+            "currency_code": "USD",
+            "first_expense": {
+                "payer_user_id": alice["id"],
+                "total_cents": 1000,
+                "description": "Lunch",
+                "shares": [
+                    {"user_id": alice["id"], "amount_cents": 500},
+                    {"user_id": bob["id"], "amount_cents": 500},
+                ],
+            },
+            "first_payment": {
+                "from_user_id": alice["id"],
+                "to_user_id": bob["id"],
+                "amount_cents": 1000,
+            },
+        },
+        headers=auth_headers(alice_token),
+    )
+
+    assert response.status_code == 422
+    assert response.get_json()["error"]["code"] == "both_first_entries"
+
+    # Mutual-exclusivity is checked before any write; no relationship row.
+    listing = client.get("/api/v1/relationships", headers=auth_headers(alice_token)).get_json()
+    assert listing["total"] == 0
+
+
+def test_reject_cascades_discard_on_pending_payment(client: FlaskClient) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    bob, bob_token = make_logged_in_user(client, "bob")
+
+    bundled = _bundled_invite_payment(
+        client,
+        alice_token,
+        "bob",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": bob["id"],
+            "amount_cents": 2000,
+            "description": "Paid you back",
+        },
+    ).get_json()
+    rel_id = bundled["relationship"]["id"]
+    payment_id = bundled["payment"]["id"]
+
+    reject_resp = client.post(
+        f"/api/v1/relationships/{rel_id}/reject",
+        headers=auth_headers(bob_token),
+    )
+    assert reject_resp.status_code == 200
+
+    payment = client.get(
+        f"/api/v1/payments/{payment_id}",
+        headers=auth_headers(bob_token),
+    ).get_json()
+    assert payment["status"] == "discarded"
+    assert payment["discarded_by_user_id"] == bob["id"]
+    assert payment["rejection_reason"] == "Relationship rejected"
+    assert payment["discarded_at"] is not None
+    assert payment["discarded_at"].endswith("Z")
+
+
+def test_accept_does_not_cascade_pending_payment(client: FlaskClient) -> None:
+    alice, alice_token = make_logged_in_user(client, "alice")
+    bob, bob_token = make_logged_in_user(client, "bob")
+
+    bundled = _bundled_invite_payment(
+        client,
+        alice_token,
+        "bob",
+        {
+            "from_user_id": alice["id"],
+            "to_user_id": bob["id"],
+            "amount_cents": 1000,
+        },
+    ).get_json()
+    rel_id = bundled["relationship"]["id"]
+    payment_id = bundled["payment"]["id"]
+
+    accept_resp = client.post(
+        f"/api/v1/relationships/{rel_id}/accept",
+        headers=auth_headers(bob_token),
+    )
+    assert accept_resp.status_code == 200
+
+    payment = client.get(
+        f"/api/v1/payments/{payment_id}",
+        headers=auth_headers(alice_token),
+    ).get_json()
+    assert payment["status"] == "pending"
+
+    # Counterparty (Bob) can confirm it the normal way.
+    confirm_resp = client.post(
+        f"/api/v1/payments/{payment_id}/confirm",
+        headers=auth_headers(bob_token),
+    )
+    assert confirm_resp.status_code == 200
+    assert confirm_resp.get_json()["status"] == "confirmed"
+
+
 # --- pagination ------------------------------------------------------
 
 
