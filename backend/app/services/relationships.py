@@ -10,7 +10,15 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
-from app.models import Expense, ExpenseStatus, Relationship, RelationshipStatus, User
+from app.models import (
+    Expense,
+    ExpenseStatus,
+    Payment,
+    PaymentStatus,
+    Relationship,
+    RelationshipStatus,
+    User,
+)
 from app.services import (
     BadRequestError,
     ConflictError,
@@ -35,15 +43,19 @@ _CASCADE_REJECT_REASON = "Relationship rejected"
 
 def invite_by_username(
     inviter: User, payload: dict[str, Any] | None
-) -> tuple[Relationship, Expense | None]:
-    """Create a pending relationship; optionally create a pending first expense.
+) -> tuple[Relationship, Expense | Payment | None]:
+    """Create a pending relationship; optionally create a pending first entry.
 
-    Returns ``(relationship, expense)``. ``expense`` is ``None`` when
-    the payload omits ``first_expense``, in which case the route emits
-    the Phase 2 single-resource response shape. When ``first_expense``
-    is present, the relationship insert and the expense + share inserts
-    happen in a single transaction; any validation failure on the
-    first expense rolls back the relationship.
+    Returns ``(relationship, entry)``. ``entry`` is ``None`` when the
+    payload omits both ``first_expense`` and ``first_payment``, in which
+    case the route emits the Phase 2 single-resource response shape. When
+    a first entry is present, the relationship insert and the entry inserts
+    happen in a single transaction; any validation failure on the entry
+    rolls back the relationship.
+
+    ``first_expense`` and ``first_payment`` are mutually exclusive: the
+    bundled flow seeds a relationship with exactly one initial entry, so
+    supplying both is a malformed request and is rejected with a 422.
     """
     if not isinstance(payload, dict):
         raise BadRequestError(message="JSON body required.")
@@ -62,6 +74,14 @@ def invite_by_username(
             details={"value": currency_code},
         )
 
+    first_expense_payload = payload.get("first_expense")
+    first_payment_payload = payload.get("first_payment")
+    if first_expense_payload is not None and first_payment_payload is not None:
+        raise ValidationError(
+            "both_first_entries",
+            "first_expense and first_payment are mutually exclusive.",
+        )
+
     invitee = db.session.execute(
         select(User).where(User.username == username.strip())
     ).scalar_one_or_none()
@@ -77,8 +97,6 @@ def invite_by_username(
             "A relationship already exists between these users.",
         )
 
-    first_expense_payload = payload.get("first_expense")
-
     rel = Relationship(
         inviting_user_id=inviter.id,
         invited_user_id=invitee.id,
@@ -87,7 +105,7 @@ def invite_by_username(
     )
     db.session.add(rel)
 
-    if first_expense_payload is None:
+    if first_expense_payload is None and first_payment_payload is None:
         try:
             db.session.commit()
         except IntegrityError:
@@ -99,7 +117,7 @@ def invite_by_username(
         return rel, None
 
     # Bundled flow: flush the relationship to obtain its id, then stage
-    # the expense + shares against it. Any service error in the expense
+    # the first entry against it. Any service error in the entry
     # validation rolls back the entire transaction so the relationship
     # is never persisted.
     try:
@@ -111,19 +129,26 @@ def invite_by_username(
             "A relationship already exists between these users.",
         ) from None
 
-    from app.services import expenses as expenses_service
-
     try:
-        expense = expenses_service.create_for_pending_relationship(
-            inviter, rel, first_expense_payload
-        )
+        if first_expense_payload is not None:
+            from app.services import expenses as expenses_service
+
+            entry: Expense | Payment = expenses_service.create_for_pending_relationship(
+                inviter, rel, first_expense_payload
+            )
+        else:
+            from app.services import payments as payments_service
+
+            entry = payments_service.create_for_pending_relationship(
+                inviter, rel, first_payment_payload
+            )
         db.session.commit()
     except ServiceError:
         db.session.rollback()
         raise
 
-    db.session.refresh(expense)
-    return rel, expense
+    db.session.refresh(entry)
+    return rel, entry
 
 
 def list_for_user(
@@ -191,11 +216,13 @@ def reject(user: User, relationship_id: int) -> Relationship:
     now = datetime.now(UTC)
     rel.status = RelationshipStatus.rejected
 
-    # Cascade-discard any pending expenses on this relationship. Phase 2
-    # forbids creating payments against non-accepted relationships, so
-    # only pending expenses can exist here; confirmed expenses cannot
-    # exist on a pending relationship, and discarded entries are
-    # terminal already.
+    # Cascade-discard any pending expenses and payments on this
+    # relationship. Only pending entries can exist here: Phase 2 forbids
+    # creating entries against a non-accepted relationship via the
+    # standalone endpoints, and the only way an entry lands on a pending
+    # relationship is the bundled invite + first-entry flow, which always
+    # creates it pending. Confirmed entries cannot exist on a pending
+    # relationship, and discarded entries are terminal already.
     pending_expenses = (
         db.session.execute(
             select(Expense).where(
@@ -211,6 +238,22 @@ def reject(user: User, relationship_id: int) -> Relationship:
         expense.discarded_at = now
         expense.discarded_by_user_id = user.id
         expense.rejection_reason = _CASCADE_REJECT_REASON
+
+    pending_payments = (
+        db.session.execute(
+            select(Payment).where(
+                Payment.relationship_id == rel.id,
+                Payment.status == PaymentStatus.pending,
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for payment in pending_payments:
+        payment.status = PaymentStatus.discarded
+        payment.discarded_at = now
+        payment.discarded_by_user_id = user.id
+        payment.rejection_reason = _CASCADE_REJECT_REASON
 
     db.session.commit()
     return rel

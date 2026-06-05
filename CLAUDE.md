@@ -23,7 +23,14 @@ in DB) that should not be casually broken.
 - Phase 4 ✓: bundled invite + first expense, list-endpoint
   pagination, password change, token expiry (idle + absolute) and
   refresh.
-- Phase 5+ (planned): Android client.
+- Phase 5 ✓: per-relationship currency (fixed, immutable
+  `currency_code` set at invite time).
+- Phase 6 ✓: Android client skeleton + auth (Kotlin + Compose;
+  see `android/`).
+- Backend, post-Phase 5: bundled invite + first *payment* (the
+  payment-flavoured parallel of the Phase 4 first-expense flow);
+  reject now cascade-discards pending payments as well as expenses.
+- Phase 7+ (planned): Android ledger UI on top of the auth skeleton.
 
 Update this section as phases land.
 

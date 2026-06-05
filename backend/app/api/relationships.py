@@ -14,9 +14,11 @@ from app.api._rate_limits import authed_write_limit
 from app.api._serializers import (
     serialize_balance_view,
     serialize_expense,
+    serialize_payment,
     serialize_relationship,
 )
 from app.auth.decorators import login_required
+from app.models import Expense
 from app.services import relationships as relationships_service
 from app.services.balance import compute_balance
 
@@ -28,12 +30,17 @@ relationships_bp = Blueprint("relationships", __name__, url_prefix="/api/v1/rela
 @authed_write_limit()
 @translates_service_errors
 def invite():
-    rel, expense = relationships_service.invite_by_username(g.current_user, json_body())
-    if expense is None:
+    rel, entry = relationships_service.invite_by_username(g.current_user, json_body())
+    if entry is None:
         return serialize_relationship(rel), 201
+    if isinstance(entry, Expense):
+        return {
+            "relationship": serialize_relationship(rel),
+            "expense": serialize_expense(entry),
+        }, 201
     return {
         "relationship": serialize_relationship(rel),
-        "expense": serialize_expense(expense),
+        "payment": serialize_payment(entry),
     }, 201
 
 

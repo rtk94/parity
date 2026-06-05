@@ -18,24 +18,24 @@ from app.services import (
 )
 
 
-def create(creator: User, payload: dict[str, Any] | None) -> Payment:
+def _stage_payment_against(
+    creator: User, rel: Relationship, payload: dict[str, Any] | None
+) -> Payment:
+    """Validate ``payload`` against ``rel.parties()`` and stage a pending
+    payment on the current session.
+
+    Does *not* commit; the caller owns the transaction so it can compose
+    with other writes (e.g. the bundled invite + first payment flow). The
+    relationship's status is not consulted here — callers enforce whatever
+    status policy they require.
+    """
     if not isinstance(payload, dict):
         raise BadRequestError(message="JSON body required.")
 
-    relationship_id = payload.get("relationship_id")
     from_user_id = payload.get("from_user_id")
     to_user_id = payload.get("to_user_id")
     amount_cents = payload.get("amount_cents")
     description = payload.get("description")
-
-    if not isinstance(relationship_id, int) or isinstance(relationship_id, bool):
-        raise NotFoundError("relationship_not_found", "Relationship not found.")
-
-    rel = db.session.get(Relationship, relationship_id)
-    if rel is None or creator.id not in rel.parties():
-        raise NotFoundError("relationship_not_found", "Relationship not found.")
-    if rel.status != RelationshipStatus.accepted:
-        raise ConflictError("relationship_not_accepted", "Relationship is not accepted.")
 
     if not isinstance(amount_cents, int) or isinstance(amount_cents, bool) or amount_cents <= 0:
         raise ValidationError("invalid_amount", "amount_cents must be a positive integer.")
@@ -69,9 +69,40 @@ def create(creator: User, payload: dict[str, Any] | None) -> Payment:
         status=PaymentStatus.pending,
     )
     db.session.add(payment)
+    return payment
+
+
+def create(creator: User, payload: dict[str, Any] | None) -> Payment:
+    if not isinstance(payload, dict):
+        raise BadRequestError(message="JSON body required.")
+
+    relationship_id = payload.get("relationship_id")
+    if not isinstance(relationship_id, int) or isinstance(relationship_id, bool):
+        raise NotFoundError("relationship_not_found", "Relationship not found.")
+
+    rel = db.session.get(Relationship, relationship_id)
+    if rel is None or creator.id not in rel.parties():
+        raise NotFoundError("relationship_not_found", "Relationship not found.")
+    if rel.status != RelationshipStatus.accepted:
+        raise ConflictError("relationship_not_accepted", "Relationship is not accepted.")
+
+    payment = _stage_payment_against(creator, rel, payload)
     db.session.commit()
     db.session.refresh(payment)
     return payment
+
+
+def create_for_pending_relationship(
+    creator: User, rel: Relationship, payload: dict[str, Any] | None
+) -> Payment:
+    """Stage a pending payment against a just-created pending relationship.
+
+    Used only by the bundled invite-with-first-payment flow in the
+    ``relationships`` service. Does not commit; the bundled flow runs the
+    whole sequence (relationship insert + payment) in one transaction so a
+    422 on the payment rolls back the relationship.
+    """
+    return _stage_payment_against(creator, rel, payload)
 
 
 def list_for_user(
