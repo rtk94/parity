@@ -20,13 +20,6 @@ Phase 2 partial unique index from `(min_user, max_user) WHERE status !=
 'rejected'` to `(min_user, max_user, currency_code) WHERE status !=
 'rejected'`. Deferred from Phase 5 planning.
 
-### Bundled invite + first payment
-
-Parallel to the Phase 4 bundled invite + first expense flow. Allow a
-single `POST /relationships` request to establish a relationship and
-submit an initial payment in one transaction. Deferred from Phase 2
-and Phase 4.
-
 ### Password reset / forgot-password flow
 
 Currently a forgotten password is unrecoverable without server-side DB
