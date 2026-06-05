@@ -7,7 +7,8 @@ will consume it in a later phase.
 Through **Phase 5**, the backend covers auth (with password change,
 token refresh, and idle + absolute token expiry), relationships
 (including a required per-relationship `currency_code`, the bundled
-invite + first-expense flow, and cascade discard on rejection),
+invite + first-entry flow for both expenses and payments, and cascade
+discard on rejection),
 expenses, payments, balance computation, paginated list endpoints,
 the Phase 3 hardening pass (DB-level immutability triggers, request
 rate limiting, login response-timing equalisation), and rate limits
@@ -128,10 +129,11 @@ return `{"items": [...], "total": N, "limit": L, "offset": O,
 Timestamps are ISO 8601 with a `Z` suffix.
 
 The single exception to the single-resource rule is `POST
-/relationships` when the request includes `first_expense`: the
-response is a two-resource envelope `{"relationship": {...},
-"expense": {...}}` so the bundled invite + first expense flow can
-return both rows in one round trip.
+/relationships` when the request includes `first_expense` or
+`first_payment`: the response is a two-resource envelope
+`{"relationship": {...}, "expense": {...}}` (or `{"relationship":
+{...}, "payment": {...}}`) so the bundled invite + first-entry flow
+can return both rows in one round trip.
 
 ### Invite
 
@@ -176,11 +178,43 @@ the bundled relationship is freshly created and still pending.
 When `first_expense` is omitted, the endpoint returns the
 relationship object directly.
 
-Rejecting a relationship cascade-discards any pending expenses still
-attached to it. The discarded rows carry `rejection_reason:
-"Relationship rejected"` and `discarded_by_user_id` set to the
-rejecter; confirmed expenses are never affected (they cannot exist on
-a non-accepted relationship anyway).
+`first_payment` is the payment-flavoured alternative on the same
+request, parallel to `first_expense`:
+
+```json
+{
+  "username": "bob",
+  "currency_code": "USD",
+  "first_payment": {
+    "from_user_id": 1,
+    "to_user_id": 2,
+    "amount_cents": 5000,
+    "description": "Paid you back"
+  }
+}
+```
+
+A payment is an independent ledger entry — money moving between the
+two parties — not a settlement of any particular expense, so seeding a
+brand-new relationship with a first payment is meaningful on its own.
+When `first_payment` is present, the relationship and payment rows are
+inserted in a single transaction; a validation failure on the payment
+rolls back the relationship. The payment validations match the
+standalone `POST /payments` codes (`invalid_amount`, `invalid_party`,
+`same_parties`), with the same `relationship_not_accepted` carve-out as
+`first_expense`.
+
+`first_expense` and `first_payment` are mutually exclusive: the
+bundled flow seeds a relationship with exactly one initial entry.
+Supplying both returns `422 both_first_entries` and writes nothing.
+When `first_payment` is present, the response envelope is
+`{"relationship": {...}, "payment": {...}}`.
+
+Rejecting a relationship cascade-discards any pending expenses *and
+payments* still attached to it. The discarded rows carry
+`rejection_reason: "Relationship rejected"` and `discarded_by_user_id`
+set to the rejecter; confirmed entries are never affected (they cannot
+exist on a non-accepted relationship anyway).
 
 ### Pagination
 
