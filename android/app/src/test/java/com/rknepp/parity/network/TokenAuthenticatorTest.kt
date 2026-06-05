@@ -1,5 +1,6 @@
 package com.rknepp.parity.network
 
+import app.cash.turbine.test
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
@@ -13,8 +14,6 @@ import com.rknepp.parity.storage.SecureTokenStore
 import com.rknepp.parity.storage.TinkAeadProvider
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.mockwebserver.MockResponse
@@ -163,19 +162,21 @@ class TokenAuthenticatorTest {
     }
 
     @Test
-    fun refreshFailureClearsTokenAndEmitsSessionExpired() = runTest {
+    fun refreshFailureClearsTokenAndEmitsSessionExpired() = runBlocking {
         tokenStore.set("old-token")
         server.enqueue(MockResponse().setResponseCode(401))
         server.enqueue(MockResponse().setResponseCode(401))
 
-        val response = client.newCall(get("/api/v1/auth/me")).execute()
-        response.use { assertEquals(401, it.code) }
+        eventBus.events.test {
+            val response = client.newCall(get("/api/v1/auth/me")).execute()
+            response.use { assertEquals(401, it.code) }
+
+            val emitted = awaitItem()
+            assertTrue(emitted is AuthEvent.SessionExpired)
+            cancelAndIgnoreRemainingEvents()
+        }
 
         assertNull(tokenStore.token.first())
-
-        val emitted = withTimeoutOrNull(2_000) { eventBus.events.first() }
-        assertNotNull("expected SessionExpired event", emitted)
-        assertTrue(emitted is AuthEvent.SessionExpired)
     }
 
     @Test
