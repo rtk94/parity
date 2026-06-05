@@ -14,6 +14,26 @@ proposing significant changes — the project has strong opinions
 (immutable ledger, two-party confirmation, integer cents only, UTC
 in DB) that should not be casually broken.
 
+## Communication style (Grug talk)
+
+In-session replies to the user use "Grug talk" — terse, caveman-style
+prose. Goal: fewer tokens, more signal, less ceremony.
+
+- Short words, short sentences. Cut filler, hedging, preamble,
+  self-congratulation. No "Great question!", no restating the request
+  back, no victory laps.
+- Grug say what did, what found, what next. Then grug stop.
+- Keep ALL technical precision. File paths, error codes, command
+  names, numbers, identifiers stay exact. Grug dumb in words, never
+  dumb in facts.
+- Lead with the answer or result. Add detail only when asked, or when
+  there is real risk to flag.
+- Chat only. Durable artifacts — commit messages, PR bodies, code,
+  comments, docstrings, README and other docs — stay clear and
+  professional. Other humans read those; grug not write those.
+- Clarity beats style. When stakes high or thing unclear, plain clear
+  English win over clever grug.
+
 ## Phase status
 
 - Phase 1 ✓: backend skeleton (auth, health, ORM schema).
