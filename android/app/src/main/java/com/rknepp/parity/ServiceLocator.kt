@@ -9,6 +9,8 @@ import com.rknepp.parity.home.data.MeRepository
 import com.rknepp.parity.network.AuthInterceptor
 import com.rknepp.parity.network.RetrofitFactory
 import com.rknepp.parity.network.TokenAuthenticator
+import com.rknepp.parity.relationships.data.RelationshipApi
+import com.rknepp.parity.relationships.data.RelationshipRepository
 import com.rknepp.parity.storage.AndroidKeystoreTinkAeadProvider
 import com.rknepp.parity.storage.SecureTokenStore
 import com.rknepp.parity.storage.ServerUrlStore
@@ -51,6 +53,7 @@ class ServiceLocator(context: Context) {
     private val currentBaseUrl = AtomicReference<String?>(null)
     private val currentRetrofit = AtomicReference<Retrofit?>(null)
     private val currentAuthApi = AtomicReference<AuthApi?>(null)
+    private val currentRelationshipApi = AtomicReference<RelationshipApi?>(null)
 
     private val authInterceptor = AuthInterceptor(tokenStore)
 
@@ -77,6 +80,10 @@ class ServiceLocator(context: Context) {
         authApiProvider = ::requireAuthApi,
     )
 
+    val relationshipRepository = RelationshipRepository(
+        apiProvider = ::requireRelationshipApi,
+    )
+
     init {
         // Seed the initial Retrofit synchronously so the first request
         // does not race the URL observer.
@@ -89,6 +96,7 @@ class ServiceLocator(context: Context) {
                     currentBaseUrl.set(null)
                     currentRetrofit.set(null)
                     currentAuthApi.set(null)
+                    currentRelationshipApi.set(null)
                 } else if (url != currentBaseUrl.get()) {
                     rebuild(url)
                 }
@@ -105,8 +113,12 @@ class ServiceLocator(context: Context) {
         currentBaseUrl.set(baseUrl)
         currentRetrofit.set(retrofit)
         currentAuthApi.set(retrofit.create(AuthApi::class.java))
+        currentRelationshipApi.set(retrofit.create(RelationshipApi::class.java))
     }
 
     private fun requireAuthApi(): AuthApi = currentAuthApi.get()
+        ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
+
+    private fun requireRelationshipApi(): RelationshipApi = currentRelationshipApi.get()
         ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
 }
