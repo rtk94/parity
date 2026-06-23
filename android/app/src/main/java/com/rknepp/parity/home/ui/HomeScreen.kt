@@ -26,6 +26,7 @@ import com.rknepp.parity.app.LocalServiceLocator
 @Composable
 fun HomeScreen(
     onLoggedOut: () -> Unit,
+    onNavigateToRelationships: () -> Unit,
 ) {
     val locator = LocalServiceLocator.current
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.factory(locator))
@@ -96,6 +97,12 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
                         )
+                    }
+                    Button(
+                        onClick = onNavigateToRelationships,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("View Relationships")
                     }
                     Button(
                         onClick = { vm.logout(onLoggedOut) },

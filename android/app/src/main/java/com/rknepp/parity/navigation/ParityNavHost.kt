@@ -23,6 +23,11 @@ import com.rknepp.parity.auth.ui.connect.ConnectToServerScreen
 import com.rknepp.parity.auth.ui.login.LoginScreen
 import com.rknepp.parity.auth.ui.register.RegisterScreen
 import com.rknepp.parity.home.ui.HomeScreen
+import com.rknepp.parity.ledger.ui.CreateExpenseScreen
+import com.rknepp.parity.ledger.ui.CreatePaymentScreen
+import com.rknepp.parity.relationships.ui.CreateRelationshipScreen
+import com.rknepp.parity.relationships.ui.RelationshipDetailScreen
+import com.rknepp.parity.relationships.ui.RelationshipListScreen
 
 @Composable
 fun ParityNavHost(navController: NavHostController) {
@@ -102,13 +107,40 @@ fun ParityNavHost(navController: NavHostController) {
             )
         }
         composable<Route.Home> {
-            HomeScreen(
-                onLoggedOut = {
-                    navController.navigate(Route.Login()) {
-                        popUpTo(0) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
+            com.rknepp.parity.main.ui.MainScreen(
+                onNavigateToRelationshipDetail = { id -> navController.navigate(Route.RelationshipDetail(id)) },
+                onNavigateToCreateRelationship = { navController.navigate(Route.CreateRelationship) }
+            )
+        }
+        composable<Route.CreateRelationship> {
+            CreateRelationshipScreen(
+                onBack = { navController.popBackStack() },
+                onCreated = { navController.popBackStack() }
+            )
+        }
+        composable<Route.RelationshipDetail> { backStackEntry ->
+            val args: Route.RelationshipDetail = backStackEntry.toRoute()
+            RelationshipDetailScreen(
+                relationshipId = args.relationshipId,
+                onBack = { navController.popBackStack() },
+                onNavigateToCreateExpense = { navController.navigate(Route.CreateExpense(args.relationshipId)) },
+                onNavigateToCreatePayment = { navController.navigate(Route.CreatePayment(args.relationshipId)) },
+            )
+        }
+        composable<Route.CreateExpense> { backStackEntry ->
+            val args: Route.CreateExpense = backStackEntry.toRoute()
+            CreateExpenseScreen(
+                relationshipId = args.relationshipId,
+                onBack = { navController.popBackStack() },
+                onCreated = { navController.popBackStack() }
+            )
+        }
+        composable<Route.CreatePayment> { backStackEntry ->
+            val args: Route.CreatePayment = backStackEntry.toRoute()
+            CreatePaymentScreen(
+                relationshipId = args.relationshipId,
+                onBack = { navController.popBackStack() },
+                onCreated = { navController.popBackStack() }
             )
         }
     }

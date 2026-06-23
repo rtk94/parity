@@ -78,3 +78,24 @@ def discard_expense(expense_id: int):
 def reverse_expense(expense_id: int):
     reversal = expenses_service.reverse(g.current_user, expense_id)
     return serialize_expense(reversal), 201
+
+
+@expenses_bp.post("/<int:expense_id>/comments")
+@login_required
+@authed_write_limit()
+@translates_service_errors
+def create_comment(expense_id: int):
+    from app.api._serializers import serialize_comment
+    from app.services import comments as comments_service
+    comment = comments_service.create_for_expense(g.current_user, expense_id, json_body())
+    return serialize_comment(comment), 201
+
+
+@expenses_bp.get("/<int:expense_id>/comments")
+@login_required
+@translates_service_errors
+def list_comments(expense_id: int):
+    from app.api._serializers import serialize_comment
+    from app.services import comments as comments_service
+    comments = comments_service.list_for_expense(g.current_user, expense_id)
+    return {"items": [serialize_comment(c) for c in comments]}, 200

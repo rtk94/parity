@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from app.models import Expense, Payment, Relationship, User
+from app.models import Comment, Expense, Payment, Relationship, User
 from app.services.balance import BalanceView
 
 
@@ -45,6 +45,7 @@ def serialize_expense(expense: Expense) -> dict[str, Any]:
         "payer_user_id": expense.payer_user_id,
         "total_cents": expense.total_cents,
         "description": expense.description,
+        "category": expense.category,
         "created_by_user_id": expense.created_by_user_id,
         "created_at": iso8601_z(expense.created_at),
         "status": expense.status.value,
@@ -86,4 +87,15 @@ def serialize_balance_view(bv: BalanceView) -> dict[str, Any]:
         "net_cents": bv.net_cents,
         "from_user_id": bv.from_user_id,
         "to_user_id": bv.to_user_id,
+    }
+
+
+def serialize_comment(comment: Comment) -> dict[str, Any]:
+    return {
+        "id": comment.id,
+        "user_id": comment.user_id,
+        "expense_id": comment.expense_id,
+        "payment_id": comment.payment_id,
+        "content": comment.content,
+        "created_at": iso8601_z(comment.created_at),
     }

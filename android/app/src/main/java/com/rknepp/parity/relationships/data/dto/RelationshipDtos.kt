@@ -3,6 +3,12 @@ package com.rknepp.parity.relationships.data.dto
 import com.rknepp.parity.home.model.UserSummary
 import kotlinx.serialization.Serializable
 
+@Serializable
+data class CreateRelationshipRequest(
+    val username: String,
+    val currency_code: String,
+)
+
 /**
  * Wire shape of a relationship, matching the backend
  * `serialize_relationship` envelope. Field names mirror the JSON keys;

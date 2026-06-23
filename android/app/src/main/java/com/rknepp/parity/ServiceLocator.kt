@@ -6,6 +6,8 @@ import com.rknepp.parity.auth.data.AuthApi
 import com.rknepp.parity.auth.data.AuthRepository
 import com.rknepp.parity.auth.events.AuthEventBus
 import com.rknepp.parity.home.data.MeRepository
+import com.rknepp.parity.ledger.data.LedgerApi
+import com.rknepp.parity.ledger.data.LedgerRepository
 import com.rknepp.parity.network.AuthInterceptor
 import com.rknepp.parity.network.RetrofitFactory
 import com.rknepp.parity.network.TokenAuthenticator
@@ -54,6 +56,7 @@ class ServiceLocator(context: Context) {
     private val currentRetrofit = AtomicReference<Retrofit?>(null)
     private val currentAuthApi = AtomicReference<AuthApi?>(null)
     private val currentRelationshipApi = AtomicReference<RelationshipApi?>(null)
+    private val currentLedgerApi = AtomicReference<LedgerApi?>(null)
 
     private val authInterceptor = AuthInterceptor(tokenStore)
 
@@ -84,6 +87,10 @@ class ServiceLocator(context: Context) {
         apiProvider = ::requireRelationshipApi,
     )
 
+    val ledgerRepository = LedgerRepository(
+        apiProvider = ::requireLedgerApi,
+    )
+
     init {
         // Seed the initial Retrofit synchronously so the first request
         // does not race the URL observer.
@@ -97,6 +104,7 @@ class ServiceLocator(context: Context) {
                     currentRetrofit.set(null)
                     currentAuthApi.set(null)
                     currentRelationshipApi.set(null)
+                    currentLedgerApi.set(null)
                 } else if (url != currentBaseUrl.get()) {
                     rebuild(url)
                 }
@@ -114,11 +122,15 @@ class ServiceLocator(context: Context) {
         currentRetrofit.set(retrofit)
         currentAuthApi.set(retrofit.create(AuthApi::class.java))
         currentRelationshipApi.set(retrofit.create(RelationshipApi::class.java))
+        currentLedgerApi.set(retrofit.create(LedgerApi::class.java))
     }
 
     private fun requireAuthApi(): AuthApi = currentAuthApi.get()
         ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
 
     private fun requireRelationshipApi(): RelationshipApi = currentRelationshipApi.get()
+        ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
+
+    private fun requireLedgerApi(): LedgerApi = currentLedgerApi.get()
         ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
 }

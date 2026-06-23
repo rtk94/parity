@@ -11,4 +11,12 @@ class MeRepository(
     suspend fun fetchMe(): ApiResult<UserSummary> = apiCall {
         authApiProvider().me()
     }
+
+    suspend fun updateProfile(request: com.rknepp.parity.auth.data.dto.UpdateProfileRequest): ApiResult<UserSummary> = apiCall {
+        authApiProvider().updateProfile(request)
+    }
+
+    suspend fun changePassword(request: com.rknepp.parity.auth.data.dto.ChangePasswordRequest): ApiResult<Unit> = apiCall {
+        authApiProvider().changePassword(request)
+    }
 }

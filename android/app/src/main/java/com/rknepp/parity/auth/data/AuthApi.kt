@@ -24,4 +24,10 @@ interface AuthApi {
 
     @POST("api/v1/auth/refresh")
     suspend fun refresh(): Response<LoginResponse>
+
+    @POST("api/v1/auth/change-password")
+    suspend fun changePassword(@Body body: com.rknepp.parity.auth.data.dto.ChangePasswordRequest): Response<Unit>
+
+    @retrofit2.http.PATCH("api/v1/auth/me")
+    suspend fun updateProfile(@Body body: com.rknepp.parity.auth.data.dto.UpdateProfileRequest): Response<UserSummary>
 }

@@ -78,3 +78,24 @@ def discard_payment(payment_id: int):
 def reverse_payment(payment_id: int):
     reversal = payments_service.reverse(g.current_user, payment_id)
     return serialize_payment(reversal), 201
+
+
+@payments_bp.post("/<int:payment_id>/comments")
+@login_required
+@authed_write_limit()
+@translates_service_errors
+def create_comment(payment_id: int):
+    from app.api._serializers import serialize_comment
+    from app.services import comments as comments_service
+    comment = comments_service.create_for_payment(g.current_user, payment_id, json_body())
+    return serialize_comment(comment), 201
+
+
+@payments_bp.get("/<int:payment_id>/comments")
+@login_required
+@translates_service_errors
+def list_comments(payment_id: int):
+    from app.api._serializers import serialize_comment
+    from app.services import comments as comments_service
+    comments = comments_service.list_for_payment(g.current_user, payment_id)
+    return {"items": [serialize_comment(c) for c in comments]}, 200

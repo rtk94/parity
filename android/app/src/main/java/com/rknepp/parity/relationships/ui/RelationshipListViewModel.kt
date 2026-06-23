@@ -23,6 +23,8 @@ data class RelationshipRow(
     val counterpartyUsername: String,
     val status: String,
     val currencyCode: String,
+    val canAccept: Boolean,
+    val canReject: Boolean,
 )
 
 sealed interface RelationshipListState {
@@ -65,6 +67,22 @@ class RelationshipListViewModel(
         }
     }
 
+    fun accept(id: Long) {
+        viewModelScope.launch {
+            if (relationshipRepository.accept(id) is ApiResult.Success) {
+                reload()
+            }
+        }
+    }
+
+    fun reject(id: Long) {
+        viewModelScope.launch {
+            if (relationshipRepository.reject(id) is ApiResult.Success) {
+                reload()
+            }
+        }
+    }
+
     private fun RelationshipDto.toRow(myId: Long): RelationshipRow {
         val other = if (invitingUser.id == myId) invitedUser else invitingUser
         return RelationshipRow(
@@ -73,6 +91,8 @@ class RelationshipListViewModel(
             counterpartyUsername = other.username,
             status = status,
             currencyCode = currencyCode,
+            canAccept = status == "pending" && invitedUser.id == myId,
+            canReject = status == "pending",
         )
     }
 

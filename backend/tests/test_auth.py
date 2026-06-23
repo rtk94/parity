@@ -404,3 +404,39 @@ def test_refresh_on_idle_expired_token_returns_token_expired(
     resp = client.post("/api/v1/auth/refresh", headers=_bearer(token))
     assert resp.status_code == 401
     assert resp.get_json()["error"]["code"] == "token_expired"
+
+
+# --- update profile --------------------------------------------------
+
+
+def test_update_profile_succeeds(client: FlaskClient) -> None:
+    assert _register(client).status_code == 201
+    token = _login(client).get_json()["token"]
+
+    resp = client.patch(
+        "/api/v1/auth/me",
+        json={"display_name": "Alice Updated"},
+        headers=_bearer(token),
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+    assert body["display_name"] == "Alice Updated"
+
+    me = client.get("/api/v1/auth/me", headers=_bearer(token))
+    assert me.get_json()["display_name"] == "Alice Updated"
+
+
+def test_update_profile_empty_display_name_fails(client: FlaskClient) -> None:
+    assert _register(client).status_code == 201
+    token = _login(client).get_json()["token"]
+
+    resp = client.patch(
+        "/api/v1/auth/me",
+        json={"display_name": "   "},
+        headers=_bearer(token),
+    )
+    assert resp.status_code == 422
+    assert resp.get_json()["error"]["code"] == "invalid_display_name"
+
+    me = client.get("/api/v1/auth/me", headers=_bearer(token))
+    assert me.get_json()["display_name"] == "Alice"
