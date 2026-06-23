@@ -16,6 +16,7 @@ from app.services import (
     NotFoundError,
     ValidationError,
 )
+from app.services.audit import log_action
 
 
 def _stage_payment_against(
@@ -87,6 +88,8 @@ def create(creator: User, payload: dict[str, Any] | None) -> Payment:
         raise ConflictError("relationship_not_accepted", "Relationship is not accepted.")
 
     payment = _stage_payment_against(creator, rel, payload)
+    db.session.flush()
+    log_action(creator.id, "create", "payment", payment.id)
     db.session.commit()
     db.session.refresh(payment)
     return payment
@@ -156,6 +159,7 @@ def confirm(user: User, payment_id: int) -> Payment:
     payment.status = PaymentStatus.confirmed
     payment.confirmed_at = datetime.now(UTC)
     payment.confirmed_by_user_id = user.id
+    log_action(user.id, "confirm", "payment", payment.id)
     db.session.commit()
     return payment
 
@@ -177,6 +181,7 @@ def discard(user: User, payment_id: int, payload: dict[str, Any] | None) -> Paym
     payment.discarded_at = datetime.now(UTC)
     payment.discarded_by_user_id = user.id
     payment.rejection_reason = reason
+    log_action(user.id, "discard", "payment", payment.id, details=reason)
     db.session.commit()
     return payment
 
@@ -216,6 +221,8 @@ def reverse(user: User, payment_id: int) -> Payment:
         reverses_payment_id=original.id,
     )
     db.session.add(reversal)
+    db.session.flush()
+    log_action(user.id, "reverse", "payment", reversal.id, details=f"Reversed payment {original.id}")
     db.session.commit()
     db.session.refresh(reversal)
     return reversal

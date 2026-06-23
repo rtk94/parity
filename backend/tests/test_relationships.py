@@ -183,7 +183,7 @@ def test_reinvite_after_rejection_with_different_currency_succeeds(
     assert response.get_json()["currency_code"] == "EUR"
 
 
-def test_second_accepted_relationship_with_different_currency_returns_409(
+def test_second_accepted_relationship_with_different_currency_returns_201(
     client: FlaskClient,
 ) -> None:
     _, alice_token = make_logged_in_user(client, "alice")
@@ -195,8 +195,8 @@ def test_second_accepted_relationship_with_different_currency_returns_409(
         json={"username": "bob", "currency_code": "EUR"},
         headers=auth_headers(alice_token),
     )
-    assert response.status_code == 409
-    assert response.get_json()["error"]["code"] == "relationship_exists"
+    assert response.status_code == 201
+    assert response.get_json()["currency_code"] == "EUR"
 
 
 def test_self_invite_returns_422(client: FlaskClient) -> None:

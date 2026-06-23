@@ -23,6 +23,7 @@ from app.services import (
     NotFoundError,
     ValidationError,
 )
+from app.services.audit import log_action
 
 
 def _stage_expense_against(
@@ -146,6 +147,7 @@ def create(creator: User, payload: dict[str, Any] | None) -> Expense:
         )
 
     expense = _stage_expense_against(creator, rel, payload)
+    log_action(creator.id, "create", "expense", expense.id)
     db.session.commit()
     db.session.refresh(expense)
     return expense
@@ -218,6 +220,7 @@ def confirm(user: User, expense_id: int) -> Expense:
     expense.status = ExpenseStatus.confirmed
     expense.confirmed_at = datetime.now(UTC)
     expense.confirmed_by_user_id = user.id
+    log_action(user.id, "confirm", "expense", expense.id)
     db.session.commit()
     return expense
 
@@ -239,6 +242,7 @@ def discard(user: User, expense_id: int, payload: dict[str, Any] | None) -> Expe
     expense.discarded_at = datetime.now(UTC)
     expense.discarded_by_user_id = user.id
     expense.rejection_reason = reason
+    log_action(user.id, "discard", "expense", expense.id, details=reason)
     db.session.commit()
     return expense
 
@@ -288,6 +292,7 @@ def reverse(user: User, expense_id: int) -> Expense:
             )
         )
 
+    log_action(user.id, "reverse", "expense", reversal.id, details=f"Reversed expense {original.id}")
     db.session.commit()
     db.session.refresh(reversal)
     return reversal

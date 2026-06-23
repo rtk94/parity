@@ -42,6 +42,7 @@ class Relationship(db.Model):
             "uq_relationship_user_pair",
             text("MIN(inviting_user_id, invited_user_id)"),
             text("MAX(inviting_user_id, invited_user_id)"),
+            "currency_code",
             unique=True,
             sqlite_where=text("status != 'rejected'"),
         ),
