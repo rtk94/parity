@@ -38,6 +38,7 @@ def test_create_expense_with_valid_shares_succeeds(client: FlaskClient) -> None:
             "payer_user_id": alice["id"],
             "total_cents": 5000,
             "description": "Lunch",
+            "category": "Food",
             "shares": [
                 {"user_id": alice["id"], "amount_cents": 2500},
                 {"user_id": bob["id"], "amount_cents": 2500},
@@ -52,6 +53,7 @@ def test_create_expense_with_valid_shares_succeeds(client: FlaskClient) -> None:
     assert body["payer_user_id"] == alice["id"]
     assert body["total_cents"] == 5000
     assert body["description"] == "Lunch"
+    assert body["category"] == "Food"
     assert body["created_by_user_id"] == alice["id"]
     assert body["status"] == "pending"
     assert body["confirmed_at"] is None

@@ -44,6 +44,14 @@ def change_password_limit():
     )
 
 
+def update_profile_limit():
+    """Return the per-authenticated-user update-profile limit decorator."""
+    return limiter.limit(
+        lambda: current_app.config["RATELIMIT_UPDATE_PROFILE"],
+        key_func=lambda: f"user:{g.current_user.id}",
+    )
+
+
 def refresh_limit():
     """Return the per-authenticated-user token-refresh limit decorator."""
     return limiter.limit(

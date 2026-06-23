@@ -22,6 +22,7 @@ class Config:
     RATELIMIT_REGISTER: str = os.environ.get("RATELIMIT_REGISTER", "5 per hour")
     RATELIMIT_WRITE: str = os.environ.get("RATELIMIT_WRITE", "60 per minute")
     RATELIMIT_CHANGE_PASSWORD: str = os.environ.get("RATELIMIT_CHANGE_PASSWORD", "5 per hour")
+    RATELIMIT_UPDATE_PROFILE: str = os.environ.get("RATELIMIT_UPDATE_PROFILE", "10 per hour")
     RATELIMIT_REFRESH: str = os.environ.get("RATELIMIT_REFRESH", "10 per hour")
 
     # Bearer token lifetimes. Idle is sliding from ``last_used_at``;

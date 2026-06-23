@@ -4,11 +4,9 @@ The Android client for **Parity** — a self-hosted, two-party expense
 and payment tracking ledger. The backend lives at `../backend`; see
 [`../backend/README.md`](../backend/README.md) for setup.
 
-Through **Phase 6**, the client carries the project skeleton plus
-everything needed to authenticate against the existing backend:
-"Connect to server" → register / login → a placeholder home screen.
-Business-logic screens (relationships, expenses, payments, balance)
-arrive in Phase 7 and Phase 8.
+Through **Phase 7**, the client carries the project skeleton, authentication,
+and core business-logic screens: relationships, expenses, payments, and balances.
+Settings and profile editing arrive in Phase 8.
 
 ## Stack
 
@@ -76,9 +74,9 @@ The test source set covers:
 ./gradlew lint
 ```
 
-No lint suppressions are wired in for Phase 6. If any baseline file
+No lint suppressions are wired in for Phase 7. If any baseline file
 appears under `app/lint-baseline.xml` it should be reviewed and
-removed — Phase 6 does not ship a baseline.
+removed — Phase 7 does not ship a baseline.
 
 ## Install on a device / emulator
 
@@ -156,7 +154,7 @@ Then launch **Parity** from the launcher.
 ## Deferred to later phases
 
 See [`../ROADMAP.md`](../ROADMAP.md). Notable items already deferred
-from Phase 6:
+from Phase 7:
 
 - Editing the server URL after initial setup (Phase 9 settings).
 - Password change UI (Phase 9).

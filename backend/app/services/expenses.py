@@ -42,6 +42,7 @@ def _stage_expense_against(
     payer_id = payload.get("payer_user_id")
     total_cents = payload.get("total_cents")
     description = payload.get("description")
+    category = payload.get("category")
     shares = payload.get("shares")
 
     if not isinstance(total_cents, int) or isinstance(total_cents, bool) or total_cents <= 0:
@@ -100,11 +101,15 @@ def _stage_expense_against(
             details={"total_cents": total_cents, "shares_sum_cents": shares_sum},
         )
 
+    if category is not None and (not isinstance(category, str) or len(category.strip()) > 64):
+        raise ValidationError("invalid_category", "category must be a string under 64 characters.")
+
     expense = Expense(
         relationship_id=rel.id,
         payer_user_id=payer_id,
         total_cents=total_cents,
         description=description.strip(),
+        category=category.strip() if isinstance(category, str) and category.strip() else None,
         created_by_user_id=creator.id,
         status=ExpenseStatus.pending,
     )

@@ -70,7 +70,6 @@ Located in the `android/` directory.
 
 ## Development Conventions
 
-- **Communication style (Grug talk):** In-session replies to the user are terse, caveman-style prose — short words, no filler or preamble — to save tokens and stay on task. Keep all technical precision (paths, error codes, numbers exact). Applies to chat only; commit messages, PR bodies, code, comments, and docs stay clear and professional.
 - **Ledger Invariants:** Never bypass service-layer validation for expenses and payments.
 - **Testing:** Always include unit tests for new logic. Backend tests use an in-memory DB; Android tests use MockWebServer.
 - **Error Handling:** Use the project's standard error codes and envelopes.

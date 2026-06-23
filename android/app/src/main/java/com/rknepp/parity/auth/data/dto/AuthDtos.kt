@@ -21,3 +21,14 @@ data class LoginResponse(
     val token: String,
     val user: UserSummary,
 )
+
+@Serializable
+data class UpdateProfileRequest(
+    val display_name: String,
+)
+
+@Serializable
+data class ChangePasswordRequest(
+    val current_password: String,
+    val new_password: String,
+)

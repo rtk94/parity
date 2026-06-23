@@ -14,6 +14,7 @@ from app.api._rate_limits import (
     login_username_limit,
     refresh_limit,
     register_limit,
+    update_profile_limit,
 )
 from app.auth.decorators import login_required
 from app.auth.security import (
@@ -137,6 +138,24 @@ def logout():
 def me():
     user: User = g.current_user
     return user.to_public_dict(), 200
+
+
+@auth_bp.patch("/me")
+@login_required
+@update_profile_limit()
+def update_profile():
+    data = _json_body()
+    if data is None:
+        return error_response(400, "bad_request", "JSON body required.")
+
+    display_name = data.get("display_name")
+    if display_name is not None:
+        if not isinstance(display_name, str) or not display_name.strip():
+            return error_response(422, "invalid_display_name", "display_name cannot be empty.")
+        g.current_user.display_name = display_name.strip()
+
+    db.session.commit()
+    return g.current_user.to_public_dict(), 200
 
 
 # Minimum password length enforced on ``change-password``. Matches the

@@ -33,6 +33,7 @@ class Expense(db.Model):
     relationship_id: Mapped[int] = mapped_column(ForeignKey("relationship.id"), nullable=False)
     total_cents: Mapped[int] = mapped_column(nullable=False)
     description: Mapped[str] = mapped_column(String(512), nullable=False)
+    category: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_by_user_id: Mapped[int] = mapped_column(ForeignKey("user.id"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

@@ -35,14 +35,12 @@ thereafter (DB-level CHECK plus an extended immutability trigger).
 The currency context is per-relationship; there is no cross-currency
 math anywhere in the backend.
 
-**Android:** Phase 6 complete. The skeleton ships a Kotlin + Compose
+**Android:** Phase 7 complete. The client ships a Kotlin + Compose
 single-activity app, a Retrofit/OkHttp networking layer with a
 token-refresh `Authenticator` and forced-logout cascade, an encrypted
 token store (Google Tink AEAD wrapped by an Android Keystore master
-key), and three real screens — connect-to-server, register, login —
-plus a placeholder home screen that displays the authenticated
-user's `/me` data. No business-logic screens are built yet;
-relationships and ledger flows arrive in Phase 7 and Phase 8.
+key), and the core business logic screens: relationships,
+expenses, payments, and balances. Phase 8 will add remaining polish and settings.
 
 Deferred items across all phases are tracked in
 [`ROADMAP.md`](ROADMAP.md).
