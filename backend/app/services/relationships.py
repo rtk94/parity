@@ -91,10 +91,10 @@ def invite_by_username(
     if invitee.id == inviter.id:
         raise ValidationError("cannot_invite_self", "You cannot invite yourself.")
 
-    if _existing_active_relationship(inviter.id, invitee.id) is not None:
+    if _existing_active_relationship(inviter.id, invitee.id, currency_code) is not None:
         raise ConflictError(
             "relationship_exists",
-            "A relationship already exists between these users.",
+            "A relationship already exists between these users with this currency.",
         )
 
     rel = Relationship(
@@ -112,7 +112,7 @@ def invite_by_username(
             db.session.rollback()
             raise ConflictError(
                 "relationship_exists",
-                "A relationship already exists between these users.",
+                "A relationship already exists between these users with this currency.",
             ) from None
         return rel, None
 
@@ -126,7 +126,7 @@ def invite_by_username(
         db.session.rollback()
         raise ConflictError(
             "relationship_exists",
-            "A relationship already exists between these users.",
+            "A relationship already exists between these users with this currency.",
         ) from None
 
     try:
@@ -259,11 +259,12 @@ def reject(user: User, relationship_id: int) -> Relationship:
     return rel
 
 
-def _existing_active_relationship(user_a: int, user_b: int) -> Relationship | None:
-    """Return any non-rejected relationship between the pair (either direction)."""
+def _existing_active_relationship(user_a: int, user_b: int, currency_code: str) -> Relationship | None:
+    """Return any non-rejected relationship between the pair (either direction) with this currency."""
     return db.session.execute(
         select(Relationship).where(
             Relationship.status != RelationshipStatus.rejected,
+            Relationship.currency_code == currency_code,
             or_(
                 and_(
                     Relationship.inviting_user_id == user_a,

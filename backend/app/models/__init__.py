@@ -6,6 +6,7 @@ from __future__ import annotations
 from app.models import _triggers  # noqa: F401
 from app.models.auth_token import AuthToken
 from app.models.comment import Comment
+from app.models.audit import AuditLog
 from app.models.expense import Expense, ExpenseStatus
 from app.models.expense_share import ExpenseShare
 from app.models.payment import Payment, PaymentStatus
@@ -13,6 +14,7 @@ from app.models.relationship import Relationship, RelationshipStatus
 from app.models.user import User
 
 __all__ = [
+    "AuditLog",
     "AuthToken",
     "Comment",
     "Expense",
