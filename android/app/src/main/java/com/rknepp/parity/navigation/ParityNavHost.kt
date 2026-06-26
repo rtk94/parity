@@ -19,7 +19,6 @@ import androidx.navigation.toRoute
 import com.rknepp.parity.app.LocalServiceLocator
 import com.rknepp.parity.app.StartupDestination
 import com.rknepp.parity.auth.events.AuthEvent
-import com.rknepp.parity.auth.ui.connect.ConnectToServerScreen
 import com.rknepp.parity.auth.ui.login.LoginScreen
 import com.rknepp.parity.auth.ui.register.RegisterScreen
 import com.rknepp.parity.home.ui.HomeScreen
@@ -63,22 +62,11 @@ fun ParityNavHost(navController: NavHostController) {
     }
 
     val startRoute: Route = when (start) {
-        StartupDestination.Connect -> Route.Connect
         StartupDestination.Login -> Route.Login()
         StartupDestination.Home -> Route.Home
     }
 
     NavHost(navController = navController, startDestination = startRoute) {
-        composable<Route.Connect> {
-            ConnectToServerScreen(
-                onConnected = {
-                    navController.navigate(Route.Login()) {
-                        popUpTo(0) { inclusive = true }
-                        launchSingleTop = true
-                    }
-                },
-            )
-        }
         composable<Route.Login> { backStackEntry ->
             val args: Route.Login = backStackEntry.toRoute()
             val showBanner = sessionExpiredPending
