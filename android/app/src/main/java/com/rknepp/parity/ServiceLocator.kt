@@ -15,7 +15,6 @@ import com.rknepp.parity.relationships.data.RelationshipApi
 import com.rknepp.parity.relationships.data.RelationshipRepository
 import com.rknepp.parity.storage.AndroidKeystoreTinkAeadProvider
 import com.rknepp.parity.storage.SecureTokenStore
-import com.rknepp.parity.storage.ServerUrlStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -41,8 +40,6 @@ class ServiceLocator(context: Context) {
     private val appContext = context.applicationContext
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
-    val serverUrlStore: ServerUrlStore = ServerUrlStore(appContext)
-
     private val aeadProvider = AndroidKeystoreTinkAeadProvider(
         keysetFile = File(appContext.filesDir, "tink/token_keyset.json"),
     )
@@ -50,7 +47,7 @@ class ServiceLocator(context: Context) {
 
     val authEventBus: AuthEventBus = AuthEventBus()
 
-    val startupGate: StartupGate = StartupGate(serverUrlStore, tokenStore)
+    val startupGate: StartupGate = StartupGate(tokenStore)
 
     private val currentBaseUrl = AtomicReference<String?>(null)
     private val currentRetrofit = AtomicReference<Retrofit?>(null)
@@ -92,24 +89,8 @@ class ServiceLocator(context: Context) {
     )
 
     init {
-        // Seed the initial Retrofit synchronously so the first request
-        // does not race the URL observer.
-        val initial = runBlocking { serverUrlStore.serverUrl.firstOrNull() }
-        if (!initial.isNullOrBlank()) rebuild(initial)
-
-        appScope.launch {
-            serverUrlStore.serverUrl.distinctUntilChanged().collect { url ->
-                if (url.isNullOrBlank()) {
-                    currentBaseUrl.set(null)
-                    currentRetrofit.set(null)
-                    currentAuthApi.set(null)
-                    currentRelationshipApi.set(null)
-                    currentLedgerApi.set(null)
-                } else if (url != currentBaseUrl.get()) {
-                    rebuild(url)
-                }
-            }
-        }
+        // Build the Retrofit stack immediately with the hardcoded URL
+        rebuild(BuildConfig.BASE_URL)
     }
 
     private fun rebuild(baseUrl: String) {
@@ -125,12 +106,9 @@ class ServiceLocator(context: Context) {
         currentLedgerApi.set(retrofit.create(LedgerApi::class.java))
     }
 
-    private fun requireAuthApi(): AuthApi = currentAuthApi.get()
-        ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
+    private fun requireAuthApi(): AuthApi = currentAuthApi.get()!!
 
-    private fun requireRelationshipApi(): RelationshipApi = currentRelationshipApi.get()
-        ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
+    private fun requireRelationshipApi(): RelationshipApi = currentRelationshipApi.get()!!
 
-    private fun requireLedgerApi(): LedgerApi = currentLedgerApi.get()
-        ?: error("Server URL not configured. Call ServerUrlStore.set(url) first.")
+    private fun requireLedgerApi(): LedgerApi = currentLedgerApi.get()!!
 }
