@@ -38,9 +38,13 @@ class RelationshipListViewModelTest {
 
     private val fakeRelationshipApi = object : RelationshipApi {
         var listResponse: Response<RelationshipListResponse>? = null
+
+        // Balance failures degrade to a null netCentsForMe, so tests
+        // that don't set this still exercise the list path.
+        var balanceResponse: Response<BalanceResponse>? = null
         override suspend fun list(status: String?, limit: Int?, offset: Int?) = listResponse ?: error("not set")
         override suspend fun get(id: Long) = error("unused")
-        override suspend fun balance(id: Long) = error("unused")
+        override suspend fun balance(id: Long) = balanceResponse ?: error("not set")
         override suspend fun create(request: com.rknepp.parity.relationships.data.dto.CreateRelationshipRequest) = error("unused")
         override suspend fun accept(id: Long) = error("unused")
         override suspend fun reject(id: Long) = error("unused")
@@ -71,6 +75,18 @@ class RelationshipListViewModelTest {
                 offset = 0
             )
         )
+        fakeRelationshipApi.balanceResponse = Response.success(
+            BalanceResponse(
+                relationship_id = 1,
+                // Bob owes Alice 50.00
+                confirmed = com.rknepp.parity.relationships.data.dto.BalanceViewDto(
+                    net_cents = 5000, from_user_id = 2, to_user_id = 1,
+                ),
+                projected = com.rknepp.parity.relationships.data.dto.BalanceViewDto(
+                    net_cents = 5000, from_user_id = 2, to_user_id = 1,
+                ),
+            )
+        )
 
         val viewModel = RelationshipListViewModel(relRepo, meRepo)
 
@@ -83,6 +99,8 @@ class RelationshipListViewModelTest {
             assertEquals("bob", rows[0].counterpartyUsername)
             assertEquals("accepted", rows[0].status)
             assertEquals("USD", rows[0].currencyCode)
+            // Confirmed balance resolved from the caller's viewpoint.
+            assertEquals(5000L, rows[0].netCentsForMe)
         }
     }
 

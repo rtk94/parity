@@ -29,9 +29,21 @@ data class CreateExpenseState(
     val myId: Long = 0,
     val counterpartyId: Long = 0,
     val counterpartyName: String = "",
+    val currencyCode: String = "",
     val totalCents: Long = 0L,
-    val counterpartySharePercentage: Float = 50f,
-)
+    /** Share of the total the counterparty owes, in whole percent. */
+    val counterpartySharePercent: Int = 50,
+) {
+    /**
+     * Counterparty share in cents, integer math only: rounds half up
+     * on the percentage split so shares always sum to the total.
+     */
+    val counterpartyShareCents: Long
+        get() = (totalCents * counterpartySharePercent + 50) / 100
+
+    val payerShareCents: Long
+        get() = totalCents - counterpartyShareCents
+}
 
 class CreateExpenseViewModel(
     private val relationshipId: Long,
@@ -53,10 +65,11 @@ class CreateExpenseViewModel(
                 val other = if (rel.invitingUser.id == myId) rel.invitedUser else rel.invitingUser
                 _state.update {
                     it.copy(
-                        isReady = true, 
-                        myId = myId, 
+                        isReady = true,
+                        myId = myId,
                         counterpartyId = other.id,
-                        counterpartyName = other.displayName
+                        counterpartyName = other.displayName,
+                        currencyCode = rel.currencyCode,
                     )
                 }
             } else {
@@ -70,8 +83,8 @@ class CreateExpenseViewModel(
         _state.update { it.copy(amountInput = amount, error = null, totalCents = cents) }
     }
 
-    fun updateCounterpartySharePercentage(percentage: Float) {
-        _state.update { it.copy(counterpartySharePercentage = percentage) }
+    fun updateCounterpartySharePercent(percent: Int) {
+        _state.update { it.copy(counterpartySharePercent = percent.coerceIn(0, 100)) }
     }
 
     fun updateDescription(description: String) {
@@ -88,7 +101,7 @@ class CreateExpenseViewModel(
 
         val totalCents = parseAmountToCents(current.amountInput)
         if (totalCents == null || totalCents <= 0) {
-            _state.update { it.copy(error = "Invalid amount") }
+            _state.update { it.copy(error = "Enter a valid amount") }
             return
         }
         if (current.description.isBlank()) {
@@ -98,9 +111,6 @@ class CreateExpenseViewModel(
 
         _state.update { it.copy(isSubmitting = true, error = null) }
 
-        val otherShare = (totalCents * current.counterpartySharePercentage / 100f).toLong()
-        val payerShare = totalCents - otherShare
-
         val request = CreateExpenseRequest(
             relationship_id = relationshipId,
             payer_user_id = current.myId,
@@ -108,9 +118,15 @@ class CreateExpenseViewModel(
             description = current.description.trim(),
             category = current.category.trim().ifBlank { null },
             shares = listOf(
-                ExpenseShareDto(user_id = current.myId, amount_cents = payerShare),
-                ExpenseShareDto(user_id = current.counterpartyId, amount_cents = otherShare)
-            )
+                ExpenseShareDto(
+                    user_id = current.myId,
+                    amount_cents = current.payerShareCents,
+                ),
+                ExpenseShareDto(
+                    user_id = current.counterpartyId,
+                    amount_cents = current.counterpartyShareCents,
+                ),
+            ),
         )
 
         viewModelScope.launch {
@@ -133,30 +149,37 @@ class CreateExpenseViewModel(
         _state.update { it.copy(success = false) }
     }
 
-    private fun parseAmountToCents(input: String): Long? {
-        val clean = input.replace(",", "").trim()
-        val parts = clean.split(".")
-        if (parts.size > 2) return null
-        val dollars = parts[0].toLongOrNull() ?: 0L
-        val cents = if (parts.size == 2) {
-            val c = parts[1].padEnd(2, '0').take(2)
-            c.toLongOrNull() ?: 0L
-        } else {
-            0L
-        }
-        return (dollars * 100) + cents
-    }
-
     companion object {
-        fun factory(locator: ServiceLocator, relationshipId: Long): ViewModelProvider.Factory = viewModelFactory {
-            initializer {
-                CreateExpenseViewModel(
-                    relationshipId,
-                    locator.ledgerRepository,
-                    locator.relationshipRepository,
-                    locator.meRepository,
-                )
+        fun factory(locator: ServiceLocator, relationshipId: Long): ViewModelProvider.Factory =
+            viewModelFactory {
+                initializer {
+                    CreateExpenseViewModel(
+                        relationshipId,
+                        locator.ledgerRepository,
+                        locator.relationshipRepository,
+                        locator.meRepository,
+                    )
+                }
             }
-        }
     }
+}
+
+/**
+ * Parse a decimal money string into integer cents without any float
+ * math. Accepts `12`, `12.3`, `12.34`, optional thousands commas.
+ * Returns null for anything else (too many decimals, stray characters,
+ * negatives).
+ */
+fun parseAmountToCents(input: String): Long? {
+    val clean = input.replace(",", "").trim()
+    if (clean.isEmpty()) return null
+    if (!Regex("""^\d{1,13}(\.\d{0,2})?$""").matches(clean)) return null
+    val parts = clean.split(".")
+    val major = parts[0].toLongOrNull() ?: return null
+    val minor = if (parts.size == 2 && parts[1].isNotEmpty()) {
+        parts[1].padEnd(2, '0').toLongOrNull() ?: return null
+    } else {
+        0L
+    }
+    return major * 100 + minor
 }

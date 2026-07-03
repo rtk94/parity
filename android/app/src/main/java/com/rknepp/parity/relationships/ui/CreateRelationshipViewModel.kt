@@ -20,7 +20,9 @@ data class CreateRelationshipState(
     val isSubmitting: Boolean = false,
     val error: String? = null,
     val success: Boolean = false,
-)
+) {
+    val currencyValid: Boolean get() = currencyCode.matches(Regex("^[A-Z]{3}$"))
+}
 
 class CreateRelationshipViewModel(
     private val repository: RelationshipRepository,
@@ -34,7 +36,8 @@ class CreateRelationshipViewModel(
     }
 
     fun updateCurrencyCode(currencyCode: String) {
-        _state.update { it.copy(currencyCode = currencyCode.uppercase(), error = null) }
+        val normalized = currencyCode.uppercase().filter { it in 'A'..'Z' }.take(3)
+        _state.update { it.copy(currencyCode = normalized, error = null) }
     }
 
     fun submit() {
@@ -44,15 +47,15 @@ class CreateRelationshipViewModel(
             _state.update { it.copy(error = "Username is required") }
             return
         }
-        if (current.currencyCode.length != 3) {
-            _state.update { it.copy(error = "Currency code must be 3 letters") }
+        if (!current.currencyValid) {
+            _state.update { it.copy(error = "Currency code must be 3 letters, e.g. USD") }
             return
         }
 
         _state.update { it.copy(isSubmitting = true, error = null) }
 
         viewModelScope.launch {
-            when (val result = repository.create(current.username, current.currencyCode)) {
+            when (val result = repository.create(current.username.trim(), current.currencyCode)) {
                 is ApiResult.Success -> {
                     _state.update { it.copy(isSubmitting = false, success = true) }
                 }

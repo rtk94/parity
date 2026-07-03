@@ -6,7 +6,11 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 
 sealed interface AuthEvent {
+    /** Token refresh failed or the session was revoked server-side. */
     data object SessionExpired : AuthEvent
+
+    /** The user deliberately logged out; no "session expired" banner. */
+    data object LoggedOut : AuthEvent
 }
 
 class AuthEventBus {

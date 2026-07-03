@@ -1,16 +1,17 @@
 package com.rknepp.parity
 
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
-import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
-import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.espresso.Espresso
+import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.rknepp.parity.app.MainActivity
 import org.junit.Rule
 import org.junit.Test
@@ -22,232 +23,90 @@ class E2ETests {
     @get:Rule
     val composeTestRule = createAndroidComposeRule<MainActivity>()
 
+    private fun waitForText(text: String, substring: Boolean = false, timeoutMs: Long = 10_000) {
+        composeTestRule.waitUntil(timeoutMs) {
+            try {
+                composeTestRule
+                    .onAllNodesWithText(text, substring = substring, useUnmergedTree = true)[0]
+                    .assertIsDisplayed()
+                true
+            } catch (e: AssertionError) {
+                false
+            }
+        }
+    }
+
+    private fun register(username: String, displayName: String) {
+        composeTestRule.onNodeWithText("Create an account").performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Username").performTextReplacement(username)
+        composeTestRule.onNodeWithText("Display name").performTextReplacement(displayName)
+        composeTestRule.onNodeWithText("Password").performTextReplacement("password123")
+        Espresso.closeSoftKeyboard()
+        composeTestRule.onNodeWithText("Register").performClick()
+        waitForText("Sign in")
+    }
+
+    private fun login(username: String) {
+        composeTestRule.onNodeWithText("Username").performTextReplacement(username)
+        composeTestRule.onNodeWithText("Password").performTextReplacement("password123")
+        Espresso.closeSoftKeyboard()
+        composeTestRule
+            .onNode(hasText("Sign in") and hasClickAction(), useUnmergedTree = true)
+            .performClick()
+        // The bottom navigation bar marks a successful arrival at Home.
+        waitForText("Relationships")
+    }
+
+    private fun logout() {
+        composeTestRule.onAllNodesWithText("Settings", useUnmergedTree = true)[0].performClick()
+        composeTestRule.waitForIdle()
+        composeTestRule.onNodeWithText("Log out").performScrollTo().performClick()
+        composeTestRule.onNodeWithText("Yes, log out").performClick()
+        waitForText("Sign in")
+    }
+
     @Test
     fun testUnifiedE2EFlow() {
-        val uniqueId = androidx.test.platform.app.InstrumentationRegistry.getArguments().getString("uniqueId", "test_" + System.currentTimeMillis())
+        val uniqueId = androidx.test.platform.app.InstrumentationRegistry.getArguments()
+            .getString("uniqueId", "test_" + System.currentTimeMillis())
         val aliceUsername = "alice_$uniqueId"
         val bobUsername = "bob_$uniqueId"
-        
-        // 1. Register Alice
-        composeTestRule.onNodeWithText("Create an account").performClick()
+
+        // 1. Register both users.
+        register(aliceUsername, "Alice Test")
+        register(bobUsername, "Bob Test")
+
+        // 2. Alice invites Bob (default currency USD).
+        login(aliceUsername)
+        composeTestRule.onAllNodesWithText("Relationships", useUnmergedTree = true)[0]
+            .performClick()
         composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithText("Username").performTextInput(aliceUsername)
-        composeTestRule.onNodeWithText("Display name").performTextInput("Alice Test")
-        composeTestRule.onNodeWithText("Password").performTextInput("password123")
+        composeTestRule.onNodeWithText("Invite someone", substring = true).performClick()
+        composeTestRule.onNodeWithText("Their username").performTextInput(bobUsername)
         Espresso.closeSoftKeyboard()
-        composeTestRule.onNodeWithText("Register").performClick()
+        composeTestRule.onNodeWithText("Send invite").performClick()
+        waitForText("Invite sent")
+        logout()
 
-        // Wait for Sign in
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onAllNodesWithText("Sign in", useUnmergedTree = true)[0].assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-        
-        // 2. Register Bob
-        composeTestRule.onNodeWithText("Create an account").performClick()
-        composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithText("Username").performTextReplacement(bobUsername)
-        composeTestRule.onNodeWithText("Display name").performTextReplacement("Bob Test")
-        composeTestRule.onNodeWithText("Password").performTextReplacement("password123")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onNodeWithText("Register").performClick()
-
-        // Wait for Sign in again
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onAllNodesWithText("Sign in", useUnmergedTree = true)[0].assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-        
-        composeTestRule.onNodeWithText("Username").performTextReplacement(aliceUsername)
-        composeTestRule.onNodeWithText("Password").performTextReplacement("password123")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onNode(androidx.compose.ui.test.hasText("Sign in") and androidx.compose.ui.test.hasClickAction(), useUnmergedTree = true).performClick()
-        
-        // Wait for Home
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithText("View Relationships").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // Alice logs out
-        composeTestRule.onNodeWithText("Log out").performClick()
-
-        // Wait for sign in screen
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onAllNodesWithText("Sign in", useUnmergedTree = true)[0].assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // 2. Register Bob
-        composeTestRule.onNodeWithText("Create an account").performClick()
-        composeTestRule.waitForIdle()
-
-        composeTestRule.onNodeWithText("Username").performTextReplacement(bobUsername)
-        composeTestRule.onNodeWithText("Display name").performTextInput("Bob Test")
-        composeTestRule.onNodeWithText("Password").performTextInput("password123")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onNodeWithText("Register").performClick()
-
-        // Login as Bob
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onAllNodesWithText("Sign in", useUnmergedTree = true)[0].assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        composeTestRule.onNodeWithText("Username").performTextReplacement(bobUsername)
-        composeTestRule.onNodeWithText("Password").performTextInput("password123")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onAllNodesWithText("Sign in")[1].performClick()
-
-        // Wait for Home
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithText("View Relationships").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // Bob logs out
-        composeTestRule.onNodeWithText("Log out").performClick()
-
-        // Wait for Sign in
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onAllNodesWithText("Sign in", useUnmergedTree = true)[0].assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // 3. Login Alice to create relationship and expense
-        composeTestRule.onNodeWithText("Username").performTextReplacement(aliceUsername)
-        composeTestRule.onNodeWithText("Password").performTextInput("password123")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onAllNodesWithText("Sign in")[1].performClick()
-
-        // Wait for Home
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithText("View Relationships").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // Navigate to Relationships
-        composeTestRule.onNodeWithText("View Relationships").performClick()
-        composeTestRule.onNodeWithContentDescription("Add Relationship").performClick()
-
-        composeTestRule.onNodeWithText("Counterparty Username").performTextInput(bobUsername)
-        composeTestRule.onNodeWithText("Currency Code (e.g. USD)").performTextInput("USD")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onNodeWithText("Send Invite").performClick()
-        
-        // Wait for it to be created and to navigate back
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithContentDescription("Add Relationship").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-        
-        // Alice goes to settings to log out
-        composeTestRule.onAllNodesWithText("Settings", useUnmergedTree = true)[0].performClick()
-        composeTestRule.onNodeWithText("Log Out").performClick()
-
-        // Wait for Sign in
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onAllNodesWithText("Sign in", useUnmergedTree = true)[0].assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // 4. Login Bob to accept relationship and add expense
-        composeTestRule.onNodeWithText("Username").performTextReplacement(bobUsername)
-        composeTestRule.onNodeWithText("Password").performTextReplacement("password123")
-        Espresso.closeSoftKeyboard()
-        composeTestRule.onNode(androidx.compose.ui.test.hasText("Sign in") and androidx.compose.ui.test.hasClickAction(), useUnmergedTree = true).performClick()
-
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithText("View Relationships").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        composeTestRule.onNodeWithText("View Relationships").performClick()
-        
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithText("Accept").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
+        // 3. Bob accepts and records an expense.
+        login(bobUsername)
+        composeTestRule.onAllNodesWithText("Relationships", useUnmergedTree = true)[0]
+            .performClick()
+        waitForText("Accept")
         composeTestRule.onNodeWithText("Accept").performClick()
+        waitForText("Alice Test")
+        composeTestRule.onNodeWithText("Alice Test").performClick()
+        waitForText("Add expense")
 
-        // Bob clicks the relationship to add expense
-        composeTestRule.onNodeWithText(aliceUsername, substring = true).performClick()
-
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithContentDescription("Add Expense").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
-
-        // Add Expense
-        composeTestRule.onNodeWithContentDescription("Add Expense").performClick()
-        
-        composeTestRule.onNodeWithText("Amount").performTextInput("1500")
+        composeTestRule.onNodeWithText("Add expense").performClick()
+        composeTestRule.onNodeWithText("Total amount").performTextInput("15.00")
         composeTestRule.onNodeWithText("Description").performTextInput("Dinner")
         Espresso.closeSoftKeyboard()
-        composeTestRule.onNodeWithText("Create").performClick()
-        
-        // Wait for success
-        composeTestRule.waitUntil(10000) {
-            try {
-                composeTestRule.onNodeWithText("Dinner").assertIsDisplayed()
-                true
-            } catch (e: AssertionError) {
-                false
-            }
-        }
+        composeTestRule.onNodeWithText("Save expense").performScrollTo().performClick()
+
+        // Back on the detail screen the new entry appears via the
+        // on-resume refresh.
+        waitForText("Dinner")
     }
 }

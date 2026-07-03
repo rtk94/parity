@@ -27,8 +27,11 @@ data class CreatePaymentState(
     val myId: Long = 0,
     val counterpartyId: Long = 0,
     val counterpartyName: String = "",
+    val currencyCode: String = "",
     val isUserPaying: Boolean = true,
-)
+) {
+    val amountCents: Long get() = parseAmountToCents(amountInput) ?: 0L
+}
 
 class CreatePaymentViewModel(
     private val relationshipId: Long,
@@ -50,10 +53,11 @@ class CreatePaymentViewModel(
                 val other = if (rel.invitingUser.id == myId) rel.invitedUser else rel.invitingUser
                 _state.update {
                     it.copy(
-                        isReady = true, 
-                        myId = myId, 
+                        isReady = true,
+                        myId = myId,
                         counterpartyId = other.id,
-                        counterpartyName = other.displayName
+                        counterpartyName = other.displayName,
+                        currencyCode = rel.currencyCode,
                     )
                 }
             } else {
@@ -78,9 +82,9 @@ class CreatePaymentViewModel(
         val current = _state.value
         if (current.isSubmitting || !current.isReady) return
 
-        val totalCents = parseAmountToCents(current.amountInput)
-        if (totalCents == null || totalCents <= 0) {
-            _state.update { it.copy(error = "Invalid amount") }
+        val amountCents = parseAmountToCents(current.amountInput)
+        if (amountCents == null || amountCents <= 0) {
+            _state.update { it.copy(error = "Enter a valid amount") }
             return
         }
         if (current.description.isBlank()) {
@@ -94,8 +98,8 @@ class CreatePaymentViewModel(
             relationship_id = relationshipId,
             from_user_id = if (current.isUserPaying) current.myId else current.counterpartyId,
             to_user_id = if (current.isUserPaying) current.counterpartyId else current.myId,
-            amount_cents = totalCents,
-            description = current.description,
+            amount_cents = amountCents,
+            description = current.description.trim(),
         )
 
         viewModelScope.launch {
@@ -118,30 +122,17 @@ class CreatePaymentViewModel(
         _state.update { it.copy(success = false) }
     }
 
-    private fun parseAmountToCents(input: String): Long? {
-        val clean = input.replace(",", "").trim()
-        val parts = clean.split(".")
-        if (parts.size > 2) return null
-        val dollars = parts[0].toLongOrNull() ?: 0L
-        val cents = if (parts.size == 2) {
-            val c = parts[1].padEnd(2, '0').take(2)
-            c.toLongOrNull() ?: 0L
-        } else {
-            0L
-        }
-        return (dollars * 100) + cents
-    }
-
     companion object {
-        fun factory(locator: ServiceLocator, relationshipId: Long): ViewModelProvider.Factory = viewModelFactory {
-            initializer {
-                CreatePaymentViewModel(
-                    relationshipId,
-                    locator.ledgerRepository,
-                    locator.relationshipRepository,
-                    locator.meRepository,
-                )
+        fun factory(locator: ServiceLocator, relationshipId: Long): ViewModelProvider.Factory =
+            viewModelFactory {
+                initializer {
+                    CreatePaymentViewModel(
+                        relationshipId,
+                        locator.ledgerRepository,
+                        locator.relationshipRepository,
+                        locator.meRepository,
+                    )
+                }
             }
-        }
     }
 }
