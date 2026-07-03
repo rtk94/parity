@@ -292,7 +292,9 @@ def reverse(user: User, expense_id: int) -> Expense:
             )
         )
 
-    log_action(user.id, "reverse", "expense", reversal.id, details=f"Reversed expense {original.id}")
+    log_action(
+        user.id, "reverse", "expense", reversal.id, details=f"Reversed expense {original.id}"
+    )
     db.session.commit()
     db.session.refresh(reversal)
     return reversal

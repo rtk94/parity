@@ -6,67 +6,143 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rknepp.parity.ServiceLocator
-import com.rknepp.parity.auth.data.AuthRepository
 import com.rknepp.parity.home.data.MeRepository
 import com.rknepp.parity.home.model.UserSummary
 import com.rknepp.parity.network.ApiResult
+import com.rknepp.parity.relationships.data.RelationshipRepository
+import com.rknepp.parity.relationships.data.RelationshipWithBalance
+import com.rknepp.parity.relationships.data.listWithBalances
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.math.absoluteValue
+
+/**
+ * Net confirmed position across all accepted relationships in one
+ * currency. Positive [netCents]: others owe you overall.
+ */
+data class CurrencyPosition(
+    val currencyCode: String,
+    val netCents: Long,
+)
+
+/** Compact relationship row for the dashboard preview list. */
+data class HomeRelationship(
+    val id: Long,
+    val counterpartyName: String,
+    val currencyCode: String,
+    /** Positive: they owe you. Null when the balance fetch failed. */
+    val netCentsForMe: Long?,
+)
+
+data class HomeData(
+    val user: UserSummary,
+    val positions: List<CurrencyPosition>,
+    val invitesForMe: Int,
+    val invitesSent: Int,
+    val activeRelationships: List<HomeRelationship>,
+)
 
 sealed interface HomeState {
     data object Loading : HomeState
-    data class Loaded(val user: UserSummary) : HomeState
+    data class Loaded(val data: HomeData) : HomeState
     data object Error : HomeState
 }
 
-data class HomeUi(
-    val state: HomeState = HomeState.Loading,
-    val loggingOut: Boolean = false,
-    val logoutWarning: Boolean = false,
-)
-
 class HomeViewModel(
     private val meRepository: MeRepository,
-    private val authRepository: AuthRepository,
+    private val relationshipRepository: RelationshipRepository,
 ) : ViewModel() {
 
-    private val _ui = MutableStateFlow(HomeUi())
-    val ui: StateFlow<HomeUi> = _ui.asStateFlow()
+    private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
+    val state: StateFlow<HomeState> = _state.asStateFlow()
+
+    private var loadInFlight = false
 
     init { reload() }
 
-    fun reload() {
-        _ui.update { it.copy(state = HomeState.Loading) }
+    /** Full load: drops to the Loading state first. */
+    fun reload() = load(showLoading = true)
+
+    /** Silent revalidation that keeps current content on screen. */
+    fun refresh() = load(showLoading = _state.value !is HomeState.Loaded)
+
+    private fun load(showLoading: Boolean) {
+        if (loadInFlight) return
+        loadInFlight = true
+        if (showLoading) _state.update { HomeState.Loading }
         viewModelScope.launch {
-            when (val result = meRepository.fetchMe()) {
-                is ApiResult.Success -> _ui.update { it.copy(state = HomeState.Loaded(result.data)) }
-                // 401 is handled inside the authenticator -> session
-                // expired event -> nav back to login. From the
-                // ViewModel's perspective any non-success here is just
-                // "couldn't load" since by the time we render, the nav
-                // host has likely already moved us off this screen.
-                else -> _ui.update { it.copy(state = HomeState.Error) }
+            try {
+                val meResult = meRepository.fetchMe()
+                if (meResult !is ApiResult.Success) {
+                    _state.update { HomeState.Error }
+                    return@launch
+                }
+                val me = meResult.data
+
+                when (val listResult = relationshipRepository.listWithBalances()) {
+                    is ApiResult.Success -> {
+                        _state.update { HomeState.Loaded(buildData(me, listResult.data)) }
+                    }
+                    else -> _state.update { HomeState.Error }
+                }
+            } finally {
+                loadInFlight = false
             }
         }
     }
 
-    fun logout(onLoggedOut: () -> Unit) {
-        if (_ui.value.loggingOut) return
-        _ui.update { it.copy(loggingOut = true, logoutWarning = false) }
-        viewModelScope.launch {
-            val result = authRepository.logout()
-            val warning = result !is ApiResult.Success
-            _ui.update { it.copy(loggingOut = false, logoutWarning = warning) }
-            onLoggedOut()
+    private fun buildData(me: UserSummary, rows: List<RelationshipWithBalance>): HomeData {
+        val accepted = rows.filter { it.relationship.status == "accepted" }
+        val pending = rows.filter { it.relationship.status == "pending" }
+
+        val active = accepted.map { row ->
+            val rel = row.relationship
+            val other = if (rel.invitingUser.id == me.id) rel.invitedUser else rel.invitingUser
+            val net = row.balance?.confirmed?.let { view ->
+                when {
+                    view.netCents == 0L -> 0L
+                    view.toUserId == me.id -> view.netCents
+                    else -> -view.netCents
+                }
+            }
+            HomeRelationship(
+                id = rel.id,
+                counterpartyName = other.displayName,
+                currencyCode = rel.currencyCode,
+                netCentsForMe = net,
+            )
         }
+
+        val positions = active
+            .filter { it.netCentsForMe != null }
+            .groupBy { it.currencyCode }
+            .map { (code, group) ->
+                CurrencyPosition(
+                    currencyCode = code,
+                    netCents = group.sumOf { it.netCentsForMe ?: 0L },
+                )
+            }
+            .sortedBy { it.currencyCode }
+
+        return HomeData(
+            user = me,
+            positions = positions,
+            invitesForMe = pending.count { it.relationship.invitedUser.id == me.id },
+            invitesSent = pending.count { it.relationship.invitingUser.id == me.id },
+            activeRelationships = active
+                .sortedByDescending { it.netCentsForMe?.absoluteValue ?: -1L }
+                .take(3),
+        )
     }
 
     companion object {
         fun factory(locator: ServiceLocator): ViewModelProvider.Factory = viewModelFactory {
-            initializer { HomeViewModel(locator.meRepository, locator.authRepository) }
+            initializer {
+                HomeViewModel(locator.meRepository, locator.relationshipRepository)
+            }
         }
     }
 }

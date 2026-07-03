@@ -6,8 +6,11 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rknepp.parity.ServiceLocator
+import com.rknepp.parity.auth.data.AuthRepository
 import com.rknepp.parity.auth.data.dto.ChangePasswordRequest
 import com.rknepp.parity.auth.data.dto.UpdateProfileRequest
+import com.rknepp.parity.auth.events.AuthEvent
+import com.rknepp.parity.auth.events.AuthEventBus
 import com.rknepp.parity.home.data.MeRepository
 import com.rknepp.parity.network.ApiResult
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -30,7 +33,8 @@ data class SettingsState(
 
 class SettingsViewModel(
     private val meRepository: MeRepository,
-    private val authEventBus: com.rknepp.parity.auth.events.AuthEventBus,
+    private val authRepository: AuthRepository,
+    private val authEventBus: AuthEventBus,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -44,10 +48,12 @@ class SettingsViewModel(
         viewModelScope.launch {
             val result = meRepository.fetchMe()
             if (result is ApiResult.Success) {
-                _state.update { it.copy(
-                    username = result.data.username,
-                    displayName = result.data.displayName
-                ) }
+                _state.update {
+                    it.copy(
+                        username = result.data.username,
+                        displayName = result.data.displayName,
+                    )
+                }
             }
         }
     }
@@ -59,18 +65,26 @@ class SettingsViewModel(
         }
         _state.update { it.copy(isSavingProfile = true, profileError = null, profileSuccess = false) }
         viewModelScope.launch {
-            val result = meRepository.updateProfile(UpdateProfileRequest(displayName))
-            if (result is ApiResult.Success) {
-                _state.update { it.copy(
-                    isSavingProfile = false,
-                    profileSuccess = true,
-                    displayName = result.data.displayName
-                ) }
-            } else {
-                _state.update { it.copy(
-                    isSavingProfile = false,
-                    profileError = "Failed to update profile"
-                ) }
+            when (val result = meRepository.updateProfile(UpdateProfileRequest(displayName.trim()))) {
+                is ApiResult.Success -> _state.update {
+                    it.copy(
+                        isSavingProfile = false,
+                        profileSuccess = true,
+                        displayName = result.data.displayName,
+                    )
+                }
+                is ApiResult.HttpFailure -> _state.update {
+                    it.copy(
+                        isSavingProfile = false,
+                        profileError = result.error?.message ?: "Failed to update profile",
+                    )
+                }
+                else -> _state.update {
+                    it.copy(
+                        isSavingProfile = false,
+                        profileError = "Failed to update profile. Check your connection.",
+                    )
+                }
             }
         }
     }
@@ -86,14 +100,23 @@ class SettingsViewModel(
         }
         _state.update { it.copy(isSavingPassword = true, passwordError = null, passwordSuccess = false) }
         viewModelScope.launch {
-            val result = meRepository.changePassword(ChangePasswordRequest(current, new))
-            if (result is ApiResult.Success) {
-                _state.update { it.copy(isSavingPassword = false, passwordSuccess = true) }
-            } else {
-                _state.update { it.copy(
-                    isSavingPassword = false,
-                    passwordError = "Failed to change password. Check your current password."
-                ) }
+            when (val result = meRepository.changePassword(ChangePasswordRequest(current, new))) {
+                is ApiResult.Success -> _state.update {
+                    it.copy(isSavingPassword = false, passwordSuccess = true)
+                }
+                is ApiResult.HttpFailure -> _state.update {
+                    it.copy(
+                        isSavingPassword = false,
+                        passwordError = result.error?.message
+                            ?: "Failed to change password. Check your current password.",
+                    )
+                }
+                else -> _state.update {
+                    it.copy(
+                        isSavingPassword = false,
+                        passwordError = "Failed to change password. Check your connection.",
+                    )
+                }
             }
         }
     }
@@ -107,10 +130,14 @@ class SettingsViewModel(
     }
 
     fun logout() {
+        if (_state.value.isLoggingOut) return
         _state.update { it.copy(isLoggingOut = true) }
         viewModelScope.launch {
-            // Emitting SessionExpired will clear local tokens and navigate to login
-            authEventBus.tryEmit(com.rknepp.parity.auth.events.AuthEvent.SessionExpired)
+            // Revokes the server-side token and clears the local store
+            // regardless of the network outcome, then routes to login.
+            authRepository.logout()
+            _state.update { it.copy(isLoggingOut = false) }
+            authEventBus.tryEmit(AuthEvent.LoggedOut)
         }
     }
 
@@ -119,6 +146,7 @@ class SettingsViewModel(
             initializer {
                 SettingsViewModel(
                     locator.meRepository,
+                    locator.authRepository,
                     locator.authEventBus,
                 )
             }

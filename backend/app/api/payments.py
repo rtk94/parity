@@ -87,6 +87,7 @@ def reverse_payment(payment_id: int):
 def create_comment(payment_id: int):
     from app.api._serializers import serialize_comment
     from app.services import comments as comments_service
+
     comment = comments_service.create_for_payment(g.current_user, payment_id, json_body())
     return serialize_comment(comment), 201
 
@@ -97,5 +98,6 @@ def create_comment(payment_id: int):
 def list_comments(payment_id: int):
     from app.api._serializers import serialize_comment
     from app.services import comments as comments_service
+
     comments = comments_service.list_for_payment(g.current_user, payment_id)
     return {"items": [serialize_comment(c) for c in comments]}, 200
