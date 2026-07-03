@@ -222,7 +222,9 @@ def reverse(user: User, payment_id: int) -> Payment:
     )
     db.session.add(reversal)
     db.session.flush()
-    log_action(user.id, "reverse", "payment", reversal.id, details=f"Reversed payment {original.id}")
+    log_action(
+        user.id, "reverse", "payment", reversal.id, details=f"Reversed payment {original.id}"
+    )
     db.session.commit()
     db.session.refresh(reversal)
     return reversal

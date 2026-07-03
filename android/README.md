@@ -4,9 +4,13 @@ The Android client for **Parity** — a self-hosted, two-party expense
 and payment tracking ledger. The backend lives at `../backend`; see
 [`../backend/README.md`](../backend/README.md) for setup.
 
-Through **Phase 7**, the client carries the project skeleton, authentication,
-and core business-logic screens: relationships, expenses, payments, and balances.
-Settings and profile editing arrive in Phase 8.
+Through **Phase 8**, the client carries the project skeleton,
+authentication, the core business-logic screens (relationships,
+expenses, payments, balances, comments), and the Phase 8 UI overhaul:
+a branded Material 3 theme with dark-mode support, a dashboard home
+tab with per-currency net positions, settings with profile editing and
+password change, and confirmation dialogs around every destructive
+ledger action.
 
 ## Stack
 
@@ -17,7 +21,7 @@ Settings and profile editing arrive in Phase 8.
 - Compose Navigation with `@Serializable` type-safe routes
 - Retrofit 2 + OkHttp 4 + kotlinx.serialization
 - Coroutines + StateFlow; ViewModel-per-screen
-- Preferences DataStore for the server URL
+- Preferences DataStore backing the encrypted token store
 - Google Tink AEAD (keyset wrapped by an Android Keystore master
   AEAD) for the bearer token
 - Manual DI via an `Application` subclass acting as a service locator
@@ -57,6 +61,13 @@ cd android
 
 The test source set covers:
 
+- `relationships/ui/RelationshipListViewModelTest` and
+  `RelationshipDetailViewModelTest` — state machines, counterparty
+  resolution, and caller-perspective balance mapping.
+- `relationships/ui/MoneyFormatTest` — integer-cents money formatting,
+  grouping, and signed deltas.
+- `ledger/ui/AmountAndSplitTest` — decimal-input parsing and the
+  integer-only split math (shares always sum to the total).
 - `network/ApiResultTest` — Retrofit response → `ApiResult` mapping.
 - `network/TokenAuthenticatorTest` — 401 recovery, single refresh
   under concurrent 401s, terminal failure cascade.
@@ -74,9 +85,9 @@ The test source set covers:
 ./gradlew lint
 ```
 
-No lint suppressions are wired in for Phase 7. If any baseline file
-appears under `app/lint-baseline.xml` it should be reviewed and
-removed — Phase 7 does not ship a baseline.
+No lint suppressions are wired in. If any baseline file appears under
+`app/lint-baseline.xml` it should be reviewed and removed — the
+project does not ship a baseline.
 
 ## Install on a device / emulator
 
@@ -88,24 +99,26 @@ Then launch **Parity** from the launcher.
 
 ## End-to-end flow against a running backend
 
+The server URL is compiled in via the `BASE_URL` build config field in
+`app/build.gradle.kts`; point it at your instance (for an emulator
+against a local backend, `http://10.0.2.2:5000/` plus a cleartext
+network-security exception) and rebuild.
+
 1. Run the backend (`cd ../backend && SECRET_KEY=test flask run`).
-   If you're using an emulator, the emulator can reach the host at
-   `http://10.0.2.2:5000`. On a physical device on the same LAN,
-   use the host's LAN IP.
-2. Open the app. The first screen is **Connect to server**.
-   - A malformed URL surfaces an inline validation error.
-   - A reachable URL that responds to `GET /api/v1/health` is
-     persisted, and the app routes to **Sign in**.
-3. From the sign-in screen, tap **Create an account**, fill in the
+2. From the sign-in screen, tap **Create an account**, fill in the
    three fields, and submit. On success the app returns to **Sign
    in** with the username pre-filled.
-4. Submit the credentials. On success the app routes to **Home**
-   and shows the display name fetched from `GET /api/v1/auth/me`.
-5. Tap **Log out**. The app returns to sign-in and the bearer token
-   is cleared from secure storage.
-6. Kill the backend, then tap log out before restarting it. The
-   local session still clears; the UI surfaces "Server logout
-   failed; local session cleared".
+3. Submit the credentials. On success the app lands on the **Home**
+   dashboard: greeting, per-currency net position, pending-invite
+   nudges, and a preview of your most active relationships.
+4. From the **Relationships** tab, invite a second account, accept
+   the invite from the other side, and add expenses/payments from the
+   relationship detail screen. Pending entries must be confirmed by
+   the counterparty; discard/reverse/decline actions ask for
+   confirmation first.
+5. From **Settings**, edit the display name, change the password, or
+   tap **Log out** (with confirmation). Logout revokes the server
+   token and clears secure storage before returning to sign-in.
 
 ## Forced-logout cascade (manual)
 
@@ -153,12 +166,10 @@ Then launch **Parity** from the launcher.
 
 ## Deferred to later phases
 
-See [`../ROADMAP.md`](../ROADMAP.md). Notable items already deferred
-from Phase 7:
+See [`../ROADMAP.md`](../ROADMAP.md). Notable items still deferred:
 
-- Editing the server URL after initial setup (Phase 9 settings).
-- Password change UI (Phase 9).
+- Editing the server URL in-app (it is a compile-time constant).
 - Biometric authentication.
-- Compose UI tests.
+- Compose UI tests beyond the instrumentation E2E flow.
 - Offline support, push notifications.
 - ktlint / detekt / Spotless and CI for the Android side.
