@@ -15,8 +15,10 @@ cli_bp = Blueprint("cli", __name__, cli_group=None)
 def cleanup_tokens() -> None:
     """Remove expired and revoked auth tokens from the database."""
     now = datetime.now(UTC)
-    deleted = db.session.query(AuthToken).filter(
-        (AuthToken.expires_at < now) | (AuthToken.revoked_at.isnot(None))
-    ).delete()
+    deleted = (
+        db.session.query(AuthToken)
+        .filter((AuthToken.expires_at < now) | (AuthToken.revoked_at.isnot(None)))
+        .delete()
+    )
     db.session.commit()
     click.echo(f"Deleted {deleted} expired/revoked tokens.")

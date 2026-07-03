@@ -21,12 +21,11 @@ import com.rknepp.parity.app.StartupDestination
 import com.rknepp.parity.auth.events.AuthEvent
 import com.rknepp.parity.auth.ui.login.LoginScreen
 import com.rknepp.parity.auth.ui.register.RegisterScreen
-import com.rknepp.parity.home.ui.HomeScreen
 import com.rknepp.parity.ledger.ui.CreateExpenseScreen
 import com.rknepp.parity.ledger.ui.CreatePaymentScreen
+import com.rknepp.parity.main.ui.MainScreen
 import com.rknepp.parity.relationships.ui.CreateRelationshipScreen
 import com.rknepp.parity.relationships.ui.RelationshipDetailScreen
-import com.rknepp.parity.relationships.ui.RelationshipListScreen
 
 @Composable
 fun ParityNavHost(navController: NavHostController) {
@@ -35,8 +34,8 @@ fun ParityNavHost(navController: NavHostController) {
     val initialDestination by locator.startupGate.initialDestination
         .collectAsState(initial = null)
 
-    // Forced-logout banner state is a one-shot flag consumed on first
-    // display of the login screen.
+    // Forced-logout banner state is a one-shot flag consumed by the
+    // login screen when it first composes.
     var sessionExpiredPending by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
@@ -44,6 +43,13 @@ fun ParityNavHost(navController: NavHostController) {
             when (event) {
                 AuthEvent.SessionExpired -> {
                     sessionExpiredPending = true
+                    navController.navigate(Route.Login()) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+                AuthEvent.LoggedOut -> {
+                    sessionExpiredPending = false
                     navController.navigate(Route.Login()) {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
@@ -69,9 +75,8 @@ fun ParityNavHost(navController: NavHostController) {
     NavHost(navController = navController, startDestination = startRoute) {
         composable<Route.Login> { backStackEntry ->
             val args: Route.Login = backStackEntry.toRoute()
-            val showBanner = sessionExpiredPending
             LoginScreen(
-                showSessionExpiredBanner = showBanner,
+                showSessionExpiredBanner = sessionExpiredPending,
                 onSessionExpiredConsumed = { sessionExpiredPending = false },
                 prefillUsername = args.prefillUsername.orEmpty(),
                 onLoggedIn = {
@@ -95,15 +100,19 @@ fun ParityNavHost(navController: NavHostController) {
             )
         }
         composable<Route.Home> {
-            com.rknepp.parity.main.ui.MainScreen(
-                onNavigateToRelationshipDetail = { id -> navController.navigate(Route.RelationshipDetail(id)) },
-                onNavigateToCreateRelationship = { navController.navigate(Route.CreateRelationship) }
+            MainScreen(
+                onNavigateToRelationshipDetail = { id ->
+                    navController.navigate(Route.RelationshipDetail(id))
+                },
+                onNavigateToCreateRelationship = {
+                    navController.navigate(Route.CreateRelationship)
+                },
             )
         }
         composable<Route.CreateRelationship> {
             CreateRelationshipScreen(
                 onBack = { navController.popBackStack() },
-                onCreated = { navController.popBackStack() }
+                onCreated = { navController.popBackStack() },
             )
         }
         composable<Route.RelationshipDetail> { backStackEntry ->
@@ -111,8 +120,12 @@ fun ParityNavHost(navController: NavHostController) {
             RelationshipDetailScreen(
                 relationshipId = args.relationshipId,
                 onBack = { navController.popBackStack() },
-                onNavigateToCreateExpense = { navController.navigate(Route.CreateExpense(args.relationshipId)) },
-                onNavigateToCreatePayment = { navController.navigate(Route.CreatePayment(args.relationshipId)) },
+                onNavigateToCreateExpense = {
+                    navController.navigate(Route.CreateExpense(args.relationshipId))
+                },
+                onNavigateToCreatePayment = {
+                    navController.navigate(Route.CreatePayment(args.relationshipId))
+                },
             )
         }
         composable<Route.CreateExpense> { backStackEntry ->
@@ -120,7 +133,7 @@ fun ParityNavHost(navController: NavHostController) {
             CreateExpenseScreen(
                 relationshipId = args.relationshipId,
                 onBack = { navController.popBackStack() },
-                onCreated = { navController.popBackStack() }
+                onCreated = { navController.popBackStack() },
             )
         }
         composable<Route.CreatePayment> { backStackEntry ->
@@ -128,7 +141,7 @@ fun ParityNavHost(navController: NavHostController) {
             CreatePaymentScreen(
                 relationshipId = args.relationshipId,
                 onBack = { navController.popBackStack() },
-                onCreated = { navController.popBackStack() }
+                onCreated = { navController.popBackStack() },
             )
         }
     }

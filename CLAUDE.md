@@ -31,7 +31,15 @@ in DB) that should not be casually broken.
   payment-flavoured parallel of the Phase 4 first-expense flow);
   reject now cascade-discards pending payments as well as expenses.
 - Phase 7 ✓: Android ledger UI on top of the auth skeleton (relationships, expenses, payments, balances).
-- Phase 8+ (planned): Settings, profile editing, and final UI polish.
+- Phase 8 ✓: Android UI overhaul — branded Material 3 theme
+  (light/dark), dashboard home tab (per-currency net position, invite
+  nudges), richer relationship list/detail (avatars, status chips,
+  dated ledger rows, confirm dialogs for destructive actions, error
+  snackbars), settings with profile editing + password change, and
+  bug fixes (stale lists on back-navigation, settings logout not
+  revoking/clearing the token, float money math in expense splits,
+  one-frame session-expired banner).
+- Phase 9+ (planned): remaining roadmap items (offline, push, etc.).
 
 Update this section as phases land.
 

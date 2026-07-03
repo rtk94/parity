@@ -259,8 +259,10 @@ def reject(user: User, relationship_id: int) -> Relationship:
     return rel
 
 
-def _existing_active_relationship(user_a: int, user_b: int, currency_code: str) -> Relationship | None:
-    """Return any non-rejected relationship between the pair (either direction) with this currency."""
+def _existing_active_relationship(
+    user_a: int, user_b: int, currency_code: str
+) -> Relationship | None:
+    """Return any non-rejected relationship between the pair with this currency."""
     return db.session.execute(
         select(Relationship).where(
             Relationship.status != RelationshipStatus.rejected,
