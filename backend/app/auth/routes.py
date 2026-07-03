@@ -137,7 +137,7 @@ def logout():
 @login_required
 def me():
     user: User = g.current_user
-    return user.to_public_dict(), 200
+    return user.to_private_dict(), 200
 
 
 @auth_bp.patch("/me")

@@ -26,14 +26,6 @@ Currently a forgotten password is unrecoverable without server-side DB
 access. A reset flow would require an email or recovery channel that
 does not exist yet. Deferred from Phase 4.
 
-### Periodic cleanup of expired and revoked auth_token rows
-
-The `@login_required` lookup filters out expired and revoked tokens,
-so they are harmless functionally, but the table grows monotonically.
-A maintenance command (or scheduled job) could purge rows whose
-`revoked_at` or `expires_at` is older than some retention window.
-Deferred from Phase 4.
-
 ### Audit logging
 
 Beyond the timestamps already captured by the ledger model

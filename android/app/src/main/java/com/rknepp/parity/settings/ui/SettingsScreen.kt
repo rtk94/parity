@@ -13,6 +13,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -25,6 +27,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +60,7 @@ fun SettingsScreen() {
     var currentPasswordInput by remember { mutableStateOf("") }
     var newPasswordInput by remember { mutableStateOf("") }
     var showLogoutConfirm by remember { mutableStateOf(false) }
+    var showResetConfirm by remember { mutableStateOf(false) }
 
     // Sync the loaded profile into the edit field once.
     LaunchedEffect(state.displayName) {
@@ -79,6 +83,23 @@ fun SettingsScreen() {
             delay(3000)
             vm.clearPasswordSuccess()
         }
+    }
+
+    LaunchedEffect(state.adminMessage) {
+        if (state.adminMessage != null) {
+            delay(5000)
+            vm.clearAdminMessage()
+        }
+    }
+
+    if (showResetConfirm) {
+        ResetLedgerDialog(
+            onConfirm = {
+                showResetConfirm = false
+                vm.resetLedger()
+            },
+            onDismiss = { showResetConfirm = false },
+        )
     }
 
     if (showLogoutConfirm) {
@@ -241,6 +262,15 @@ fun SettingsScreen() {
                 }
             }
 
+            if (state.isAdmin) {
+                AdminPanel(
+                    state = state,
+                    onRefreshStats = { vm.refreshAdminStats() },
+                    onCleanupTokens = { vm.cleanupTokens() },
+                    onResetLedger = { showResetConfirm = true },
+                )
+            }
+
             // Log out
             OutlinedButton(
                 onClick = { showLogoutConfirm = true },
@@ -273,4 +303,160 @@ fun SettingsScreen() {
             Spacer(modifier = Modifier.height(8.dp))
         }
     }
+}
+
+@Composable
+private fun AdminPanel(
+    state: SettingsState,
+    onRefreshStats: () -> Unit,
+    onCleanupTokens: () -> Unit,
+    onResetLedger: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Warning,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.secondary,
+                )
+                Text(
+                    "System administration",
+                    style = MaterialTheme.typography.titleMedium,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = 8.dp),
+                )
+                TextButton(onClick = onRefreshStats, enabled = !state.adminBusy) {
+                    Text("Refresh")
+                }
+            }
+
+            val stats = state.adminStats
+            if (stats != null) {
+                Column(modifier = Modifier.padding(top = 8.dp)) {
+                    AdminStatRow("Users", stats.users)
+                    AdminStatRow("Relationships", stats.relationships)
+                    AdminStatRow("Expenses", stats.expenses)
+                    AdminStatRow("Payments", stats.payments)
+                    AdminStatRow("Comments", stats.comments)
+                    AdminStatRow("Active sessions", stats.active_tokens)
+                    AdminStatRow("Audit entries", stats.audit_entries)
+                }
+            } else {
+                Text(
+                    "Stats unavailable.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+            if (state.adminMessage != null) {
+                Text(
+                    text = state.adminMessage,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            }
+
+            OutlinedButton(
+                onClick = onCleanupTokens,
+                enabled = !state.adminBusy,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp),
+            ) {
+                Text("Clean up expired tokens")
+            }
+
+            OutlinedButton(
+                onClick = onResetLedger,
+                enabled = !state.adminBusy,
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp),
+            ) {
+                if (state.adminBusy) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.height(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                } else {
+                    Text("Reset ledger…")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdminStatRow(label: String, value: Long) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(value.toString(), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+/**
+ * Type-to-confirm gate for the ledger reset. The confirm button stays
+ * disabled until the operator types RESET, mirroring the backend's own
+ * confirmation-phrase requirement.
+ */
+@Composable
+private fun ResetLedgerDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var typed by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Reset the ledger?") },
+        text = {
+            Column {
+                Text(
+                    "This permanently erases every expense, payment, and comment " +
+                        "for every user on this server. Accounts and relationships " +
+                        "survive; balances return to zero. There is no undo.",
+                )
+                OutlinedTextField(
+                    value = typed,
+                    onValueChange = { typed = it },
+                    label = { Text("Type RESET to confirm") },
+                    singleLine = true,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp),
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = onConfirm,
+                enabled = typed.trim() == "RESET",
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text("Erase everything")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        },
+    )
 }
