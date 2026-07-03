@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rknepp.parity.ServiceLocator
+import com.rknepp.parity.admin.data.AdminRepository
+import com.rknepp.parity.admin.data.dto.AdminStatsDto
 import com.rknepp.parity.auth.data.AuthRepository
 import com.rknepp.parity.auth.data.dto.ChangePasswordRequest
 import com.rknepp.parity.auth.data.dto.UpdateProfileRequest
@@ -29,11 +31,18 @@ data class SettingsState(
     val passwordError: String? = null,
     val passwordSuccess: Boolean = false,
     val isLoggingOut: Boolean = false,
+    // System administration; populated only when the signed-in user
+    // is the admin account.
+    val isAdmin: Boolean = false,
+    val adminStats: AdminStatsDto? = null,
+    val adminBusy: Boolean = false,
+    val adminMessage: String? = null,
 )
 
 class SettingsViewModel(
     private val meRepository: MeRepository,
     private val authRepository: AuthRepository,
+    private val adminRepository: AdminRepository,
     private val authEventBus: AuthEventBus,
 ) : ViewModel() {
 
@@ -52,8 +61,10 @@ class SettingsViewModel(
                     it.copy(
                         username = result.data.username,
                         displayName = result.data.displayName,
+                        isAdmin = result.data.isAdmin,
                     )
                 }
+                if (result.data.isAdmin) refreshAdminStats()
             }
         }
     }
@@ -141,12 +152,84 @@ class SettingsViewModel(
         }
     }
 
+    // --- System administration -----------------------------------------
+
+    fun refreshAdminStats() {
+        viewModelScope.launch {
+            when (val result = adminRepository.stats()) {
+                is ApiResult.Success -> _state.update { it.copy(adminStats = result.data) }
+                else -> _state.update {
+                    it.copy(adminMessage = "Couldn't load system stats.")
+                }
+            }
+        }
+    }
+
+    fun cleanupTokens() {
+        if (_state.value.adminBusy) return
+        _state.update { it.copy(adminBusy = true, adminMessage = null) }
+        viewModelScope.launch {
+            when (val result = adminRepository.cleanupTokens()) {
+                is ApiResult.Success -> {
+                    _state.update {
+                        it.copy(
+                            adminBusy = false,
+                            adminMessage =
+                                "Removed ${result.data.deleted_tokens} expired/revoked tokens.",
+                        )
+                    }
+                    refreshAdminStats()
+                }
+                else -> _state.update {
+                    it.copy(adminBusy = false, adminMessage = "Token cleanup failed. Try again.")
+                }
+            }
+        }
+    }
+
+    fun resetLedger() {
+        if (_state.value.adminBusy) return
+        _state.update { it.copy(adminBusy = true, adminMessage = null) }
+        viewModelScope.launch {
+            when (val result = adminRepository.resetLedger()) {
+                is ApiResult.Success -> {
+                    val d = result.data.deleted
+                    _state.update {
+                        it.copy(
+                            adminBusy = false,
+                            adminMessage = "Ledger reset: erased ${d.expenses} expenses, " +
+                                "${d.payments} payments, ${d.comments} comments.",
+                        )
+                    }
+                    refreshAdminStats()
+                }
+                is ApiResult.HttpFailure -> _state.update {
+                    it.copy(
+                        adminBusy = false,
+                        adminMessage = result.error?.message ?: "Ledger reset failed.",
+                    )
+                }
+                else -> _state.update {
+                    it.copy(
+                        adminBusy = false,
+                        adminMessage = "Ledger reset failed. Check your connection.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearAdminMessage() {
+        _state.update { it.copy(adminMessage = null) }
+    }
+
     companion object {
         fun factory(locator: ServiceLocator): ViewModelProvider.Factory = viewModelFactory {
             initializer {
                 SettingsViewModel(
                     locator.meRepository,
                     locator.authRepository,
+                    locator.adminRepository,
                     locator.authEventBus,
                 )
             }

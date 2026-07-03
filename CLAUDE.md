@@ -39,6 +39,15 @@ in DB) that should not be casually broken.
   bug fixes (stale lists on back-navigation, settings logout not
   revoking/clearing the token, float money math in expense splits,
   one-frame session-expired banner).
+- Post-Phase 8, system administration: `user.is_admin` +
+  `flask create-admin` (operator-only, prints a generated access key
+  once), admin API (`/admin/stats`, `/admin/cleanup-tokens`,
+  `/admin/reset-ledger` with confirmation phrase), `flask
+  reset-ledger --yes-i-mean-it` CLI, an admin panel in the Android
+  Settings screen (visible only to the admin account), and a
+  migration repairing the two relationship immutability triggers
+  silently dropped by the Phase 5 table recreate (plus a regression
+  test that runs the real migration chain).
 - Phase 9+ (planned): remaining roadmap items (offline, push, etc.).
 
 Update this section as phases land.
