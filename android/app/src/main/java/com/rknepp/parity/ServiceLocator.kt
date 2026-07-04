@@ -1,6 +1,8 @@
 package com.rknepp.parity
 
 import android.content.Context
+import com.rknepp.parity.admin.data.AdminApi
+import com.rknepp.parity.admin.data.AdminRepository
 import com.rknepp.parity.app.StartupGate
 import com.rknepp.parity.auth.data.AuthApi
 import com.rknepp.parity.auth.data.AuthRepository
@@ -54,6 +56,7 @@ class ServiceLocator(context: Context) {
     private val currentAuthApi = AtomicReference<AuthApi?>(null)
     private val currentRelationshipApi = AtomicReference<RelationshipApi?>(null)
     private val currentLedgerApi = AtomicReference<LedgerApi?>(null)
+    private val currentAdminApi = AtomicReference<AdminApi?>(null)
 
     private val authInterceptor = AuthInterceptor(tokenStore)
 
@@ -88,6 +91,10 @@ class ServiceLocator(context: Context) {
         apiProvider = ::requireLedgerApi,
     )
 
+    val adminRepository = AdminRepository(
+        apiProvider = ::requireAdminApi,
+    )
+
     init {
         // Build the Retrofit stack immediately with the hardcoded URL
         rebuild(BuildConfig.BASE_URL)
@@ -104,6 +111,7 @@ class ServiceLocator(context: Context) {
         currentAuthApi.set(retrofit.create(AuthApi::class.java))
         currentRelationshipApi.set(retrofit.create(RelationshipApi::class.java))
         currentLedgerApi.set(retrofit.create(LedgerApi::class.java))
+        currentAdminApi.set(retrofit.create(AdminApi::class.java))
     }
 
     private fun requireAuthApi(): AuthApi = currentAuthApi.get()!!
@@ -111,4 +119,6 @@ class ServiceLocator(context: Context) {
     private fun requireRelationshipApi(): RelationshipApi = currentRelationshipApi.get()!!
 
     private fun requireLedgerApi(): LedgerApi = currentLedgerApi.get()!!
+
+    private fun requireAdminApi(): AdminApi = currentAdminApi.get()!!
 }

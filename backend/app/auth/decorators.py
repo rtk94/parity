@@ -72,3 +72,21 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
         return view(*args, **kwargs)
 
     return wrapper
+
+
+def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
+    """Require ``g.current_user.is_admin``; apply *under* ``login_required``.
+
+    Non-admin callers get 404 rather than 403 so the existence of the
+    admin surface is not leaked, mirroring the non-party convention on
+    relationship-scoped routes.
+    """
+
+    @wraps(view)
+    def wrapper(*args: Any, **kwargs: Any):
+        user = getattr(g, "current_user", None)
+        if user is None or not user.is_admin:
+            return error_response(404, "not_found", "Resource not found.")
+        return view(*args, **kwargs)
+
+    return wrapper
