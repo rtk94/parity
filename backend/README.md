@@ -94,7 +94,8 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 | `POST` | `/auth/logout` | Revoke the calling token. |
 | `POST` | `/auth/refresh` | Issue a fresh token, revoke the request token. |
 | `POST` | `/auth/change-password` | Change the caller's password; revokes other sessions. |
-| `GET`  | `/auth/me` | Return the calling user. |
+| `GET`  | `/auth/me` | Return the calling user (includes `is_admin` for the caller only). |
+| `PATCH` | `/auth/me` | Update the caller's profile (`display_name`). |
 | `POST` | `/relationships` | Invite another user (optionally with a bundled first expense). |
 | `GET`  | `/relationships?status=&limit=&offset=` | List relationships visible to the caller. |
 | `GET`  | `/relationships/{id}` | Fetch one relationship. |
@@ -113,6 +114,45 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 | `POST` | `/payments/{id}/confirm` | Counterparty confirms a pending payment. |
 | `POST` | `/payments/{id}/discard` | Either party discards (optional `reason`). |
 | `POST` | `/payments/{id}/reverse` | Create a pending reversal of a confirmed payment. |
+| `GET`  | `/expenses/{id}/comments` | List comments on an expense. |
+| `POST` | `/expenses/{id}/comments` | Comment on an expense. |
+| `GET`  | `/payments/{id}/comments` | List comments on a payment. |
+| `POST` | `/payments/{id}/comments` | Comment on a payment. |
+| `GET`  | `/admin/stats` | Admin only: row counts (users, entries, tokens). |
+| `POST` | `/admin/cleanup-tokens` | Admin only: purge expired/revoked tokens. |
+| `POST` | `/admin/reset-ledger` | Admin only: erase all ledger entries (see below). |
+
+Admin endpoints return `404 not_found` for non-admin callers so the
+admin surface doesn't leak, mirroring the non-party convention on
+relationship-scoped routes.
+
+### Administration
+
+The system-administrator account is created from the server shell —
+there is no API path to admin, which is what scopes it to the
+operator:
+
+```bash
+cd backend
+SECRET_KEY=... flask create-admin root          # prints the access key once
+SECRET_KEY=... flask create-admin root --rotate-key   # new key, revokes sessions
+```
+
+The printed access key is a machine-generated 256-bit secret used as
+the password on the normal login flow. Sign in with it in the app and
+a **System administration** panel appears in Settings.
+
+`POST /admin/reset-ledger` erases every expense, share, payment, and
+comment (users, relationships, and the audit log survive; the reset is
+itself audited). It deliberately punches through the DB-level
+immutability triggers by dropping the three delete-guards, deleting,
+and reinstalling them in one transaction. The request body must be
+`{"confirm": "RESET LEDGER"}` or the call fails with
+`confirmation_required`. The same operation is available offline via:
+
+```bash
+SECRET_KEY=... flask reset-ledger --yes-i-mean-it
+```
 
 ### Response envelope
 
