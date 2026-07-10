@@ -1,0 +1,8 @@
+# Keep the build context (and image) lean.
+instance/
+tests/
+.pytest_cache/
+__pycache__/
+*.pyc
+.env
+.ruff_cache/
