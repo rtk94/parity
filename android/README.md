@@ -6,11 +6,21 @@ and payment tracking ledger. The backend lives at `../backend`; see
 
 Through **Phase 8**, the client carries the project skeleton,
 authentication, the core business-logic screens (relationships,
-expenses, payments, balances, comments), and the Phase 8 UI overhaul:
-a branded Material 3 theme with dark-mode support, a dashboard home
-tab with per-currency net positions, settings with profile editing and
-password change, and confirmation dialogs around every destructive
-ledger action.
+expenses, payments, balances, comments), a dashboard home tab with
+per-currency net positions, settings with profile editing and password
+change, and confirmation dialogs around every destructive ledger
+action.
+
+On top of that, the **"Paper" design-system overhaul** restyles the
+entire app, replacing the Phase 8 Material 3 teal theme. Paper is an
+ink-on-warm-paper palette with a single forest-green accent, an amber
+channel reserved for pending (needs-a-party) state, and red for
+you-owe/destructive actions. Titles and money figures use the Spectral
+serif; all other UI uses Hanken Grotesk — both bundled offline under
+`res/font/` (no Google Play Services fetch). Controls are pill-shaped
+and screens use a flat, editorial layout (all-caps section labels,
+hairline dividers, no card elevation) with transparent-fill
+ink-outline avatars, in full light/dark.
 
 ## Stack
 

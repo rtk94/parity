@@ -87,6 +87,13 @@ data class PaymentListResponse(
     val offset: Int,
 )
 
+/** GET /pending: entries across all relationships awaiting my confirmation. */
+@Serializable
+data class PendingResponse(
+    val expenses: List<ExpenseDto>,
+    val payments: List<PaymentDto>,
+)
+
 @Serializable
 data class CommentDto(
     val id: Long,

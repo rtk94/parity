@@ -35,15 +35,20 @@ thereafter (DB-level CHECK plus an extended immutability trigger).
 The currency context is per-relationship; there is no cross-currency
 math anywhere in the backend.
 
-**Android:** Phase 8 complete. The client ships a Kotlin + Compose
-single-activity app, a Retrofit/OkHttp networking layer with a
-token-refresh `Authenticator` and forced-logout cascade, an encrypted
-token store (Google Tink AEAD wrapped by an Android Keystore master
-key), and the full ledger UI: a dashboard home tab with per-currency
-net positions, relationship list/detail with avatars, status chips
-and dated ledger entries, expense/payment creation with integer-cents
-split math, comments, settings with profile editing and password
-change, and a branded Material 3 theme with dark-mode support.
+**Android:** Phase 8 complete, plus the "Paper" design-system
+overhaul. The client ships a Kotlin + Compose single-activity app, a
+Retrofit/OkHttp networking layer with a token-refresh `Authenticator`
+and forced-logout cascade, an encrypted token store (Google Tink AEAD
+wrapped by an Android Keystore master key), and the full ledger UI: a
+dashboard home tab with per-currency net positions, relationship
+list/detail with ink-outline avatars, status chips and dated ledger
+entries, expense/payment creation with integer-cents split math,
+comments, and settings with profile editing and password change.
+Every screen is styled in the **Paper** design system — an
+ink-on-warm-paper palette with a single forest-green accent and an
+amber pending channel, Spectral serif for titles and money figures,
+Hanken Grotesk for UI (both bundled offline), pill controls, and a
+flat editorial layout — with full light/dark support.
 
 Deferred items across all phases are tracked in
 [`ROADMAP.md`](ROADMAP.md).

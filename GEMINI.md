@@ -46,7 +46,10 @@ Located in the `backend/` directory.
 Located in the `android/` directory.
 
 ### Technologies
-- **UI:** Jetpack Compose with Material 3.
+- **UI:** Jetpack Compose with Material 3, styled with the in-house
+  "Paper" design system (ink-on-warm-paper palette, forest-green
+  accent, amber pending channel; Spectral serif + Hanken Grotesk fonts
+  bundled offline; pill controls, flat editorial layout; light/dark).
 - **Navigation:** Type-safe Compose Navigation.
 - **Networking:** Retrofit 2 + OkHttp 4 + kotlinx.serialization.
 - **Concurrency:** Coroutines + StateFlow.

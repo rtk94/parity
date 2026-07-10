@@ -55,12 +55,22 @@ class RelationshipListViewModel(
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
 
+    /** True while a user-initiated pull-to-refresh is in flight. */
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private var loadInFlight = false
 
     init { reload() }
 
     /** Full load: drops to the Loading state first. */
     fun reload() = load(showLoading = true)
+
+    /** Pull-to-refresh: revalidate while showing the pull indicator. */
+    fun pullRefresh() {
+        _isRefreshing.value = true
+        load(showLoading = false)
+    }
 
     /**
      * Silent revalidation for on-resume refreshes: keeps current rows
@@ -97,6 +107,7 @@ class RelationshipListViewModel(
                 }
             } finally {
                 loadInFlight = false
+                _isRefreshing.value = false
             }
         }
     }

@@ -1,25 +1,28 @@
 package com.rknepp.parity.home.ui
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MailOutline
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -27,6 +30,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -36,9 +40,12 @@ import com.rknepp.parity.ui.components.EmptyState
 import com.rknepp.parity.ui.components.ErrorState
 import com.rknepp.parity.ui.components.InitialsAvatar
 import com.rknepp.parity.ui.components.LoadingState
+import com.rknepp.parity.ui.theme.ParityMoney
 import com.rknepp.parity.ui.theme.ParityThemeDefaults
 import java.time.LocalTime
+import kotlin.math.absoluteValue
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToRelationships: () -> Unit,
@@ -48,6 +55,7 @@ fun HomeScreen(
     val locator = LocalServiceLocator.current
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.factory(locator))
     val state by vm.state.collectAsState()
+    val isRefreshing by vm.isRefreshing.collectAsState()
 
     // Keep the dashboard current when returning from other screens.
     LifecycleResumeEffect(Unit) {
@@ -65,13 +73,14 @@ fun HomeScreen(
             )
             is HomeState.Loaded -> {
                 if (s.data.activeRelationships.isEmpty() &&
+                    s.data.pending.isEmpty() &&
                     s.data.invitesForMe == 0 &&
                     s.data.invitesSent == 0
                 ) {
                     Column(modifier = Modifier.padding(padding)) {
                         Greeting(
                             name = s.data.user.displayName,
-                            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+                            modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
                         )
                         EmptyState(
                             icon = Icons.Default.Person,
@@ -83,16 +92,25 @@ fun HomeScreen(
                         )
                     }
                 } else {
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = vm::pullRefresh,
+                        modifier = Modifier
+                            .padding(padding)
+                            .fillMaxSize(),
+                    ) {
                     DashboardContent(
                         data = s.data,
+                        onConfirm = vm::confirm,
+                        onDecline = vm::decline,
                         onNavigateToRelationships = onNavigateToRelationships,
                         onNavigateToRelationshipDetail = onNavigateToRelationshipDetail,
                         modifier = Modifier
-                            .padding(padding)
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp),
+                            .padding(horizontal = 24.dp),
                     )
+                    }
                 }
             }
         }
@@ -102,20 +120,23 @@ fun HomeScreen(
 @Composable
 private fun DashboardContent(
     data: HomeData,
+    onConfirm: (PendingItem) -> Unit,
+    onDecline: (PendingItem) -> Unit,
     onNavigateToRelationships: () -> Unit,
     onNavigateToRelationshipDetail: (Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Greeting(
-            name = data.user.displayName,
-            modifier = Modifier.padding(top = 16.dp),
-        )
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Greeting(name = data.user.displayName, modifier = Modifier.padding(top = 16.dp))
 
-        PositionCard(positions = data.positions)
+        BalanceBlock(positions = data.positions)
+
+        if (data.pending.isNotEmpty()) {
+            PendingSection(items = data.pending, onConfirm = onConfirm, onDecline = onDecline)
+        }
 
         if (data.invitesForMe > 0 || data.invitesSent > 0) {
-            InvitesCard(
+            InvitesRow(
                 invitesForMe = data.invitesForMe,
                 invitesSent = data.invitesSent,
                 onClick = onNavigateToRelationships,
@@ -123,40 +144,13 @@ private fun DashboardContent(
         }
 
         if (data.activeRelationships.isNotEmpty()) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-            ) {
-                Column(modifier = Modifier.padding(vertical = 8.dp)) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(start = 16.dp, end = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Text(
-                            "Relationships",
-                            style = MaterialTheme.typography.titleMedium,
-                            modifier = Modifier.weight(1f),
-                        )
-                        TextButton(onClick = onNavigateToRelationships) {
-                            Text("View all")
-                        }
-                    }
-                    data.activeRelationships.forEachIndexed { index, rel ->
-                        if (index > 0) {
-                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
-                        }
-                        HomeRelationshipRow(
-                            rel = rel,
-                            onClick = { onNavigateToRelationshipDetail(rel.id) },
-                        )
-                    }
-                }
-            }
+            PeopleSection(
+                relationships = data.activeRelationships,
+                onViewAll = onNavigateToRelationships,
+                onOpen = onNavigateToRelationshipDetail,
+            )
         }
 
-        // Breathing room above the bottom navigation bar.
         Spacer(modifier = Modifier.height(8.dp))
     }
 }
@@ -180,122 +174,176 @@ private fun Greeting(name: String, modifier: Modifier = Modifier) {
     }
 }
 
+/** Money color: green when owed to you, red when you owe. */
 @Composable
-private fun PositionCard(positions: List<CurrencyPosition>, modifier: Modifier = Modifier) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-        ),
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
+private fun moneyColor(cents: Long) =
+    if (cents >= 0) ParityThemeDefaults.colors.positive else MaterialTheme.colorScheme.error
+
+@Composable
+private fun LabelCaps(text: String, color: androidx.compose.ui.graphics.Color) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = color)
+}
+
+@Composable
+private fun BalanceBlock(positions: List<CurrencyPosition>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LabelCaps("Overall", MaterialTheme.colorScheme.onSurfaceVariant)
+        if (positions.isEmpty()) {
+            Text("All square", style = ParityMoney.screen)
+        } else {
+            positions.forEach { position ->
+                val net = position.netCents
+                val figureStyle = if (positions.size == 1) ParityMoney.hero else ParityMoney.screen
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        formatCents(net.absoluteValue, position.currencyCode),
+                        style = figureStyle,
+                        color = if (net == 0L) MaterialTheme.colorScheme.onSurface else moneyColor(net),
+                    )
+                    Text(
+                        when {
+                            net == 0L -> "settled up"
+                            net > 0L -> "owed to you"
+                            else -> "you owe overall"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+        // Editorial accent: a short green rule under the balance.
+        Box(
+            Modifier
+                .width(40.dp)
+                .height(2.dp)
+                .background(ParityThemeDefaults.colors.positive),
+        )
+    }
+}
+
+@Composable
+private fun PendingSection(
+    items: List<PendingItem>,
+    onConfirm: (PendingItem) -> Unit,
+    onDecline: (PendingItem) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LabelCaps(
+            if (items.size == 1) "1 needs your confirmation"
+            else "${items.size} need your confirmation",
+            ParityThemeDefaults.colors.pending,
+        )
+        items.forEach { item ->
+            PendingRow(item, onConfirm = { onConfirm(item) }, onDecline = { onDecline(item) })
+        }
+    }
+}
+
+@Composable
+private fun PendingRow(item: PendingItem, onConfirm: () -> Unit, onDecline: () -> Unit) {
+    Column(Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(item.description, style = MaterialTheme.typography.titleMedium)
+            Text(item.amountText, style = ParityMoney.row)
+        }
+        Text(
+            item.counterpartyName + " · " + if (item.kind == PendingItem.Kind.EXPENSE) "expense" else "payment",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 3.dp),
+        )
+        Row(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
             Text(
-                "Overall position",
+                "Confirm",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(onClick = onConfirm)
+                    .padding(vertical = 14.dp),
+            )
+            Text(
+                "Decline",
                 style = MaterialTheme.typography.labelLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            if (positions.isEmpty()) {
-                Text(
-                    "No confirmed balances yet",
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(top = 6.dp),
-                )
-            } else {
-                positions.forEach { position ->
-                    PositionLine(position, modifier = Modifier.padding(top = 6.dp))
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun PositionLine(position: CurrencyPosition, modifier: Modifier = Modifier) {
-    val net = position.netCents
-    when {
-        net == 0L -> Text(
-            "Settled up in ${position.currencyCode}",
-            style = MaterialTheme.typography.titleLarge,
-            modifier = modifier,
-        )
-        net > 0L -> Column(modifier = modifier) {
-            Text(
-                formatCents(net, position.currencyCode),
-                style = MaterialTheme.typography.headlineSmall,
-                color = ParityThemeDefaults.colors.positive,
-            )
-            Text(
-                "owed to you",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        else -> Column(modifier = modifier) {
-            Text(
-                formatCents(-net, position.currencyCode),
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.error,
-            )
-            Text(
-                "you owe overall",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .clickable(onClick = onDecline)
+                    .padding(vertical = 14.dp),
             )
         }
     }
 }
 
 @Composable
-private fun InvitesCard(
-    invitesForMe: Int,
-    invitesSent: Int,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Card(
-        modifier = modifier
+private fun InvitesRow(invitesForMe: Int, invitesSent: Int, onClick: () -> Unit) {
+    Column(
+        modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(Icons.Default.MailOutline, contentDescription = null)
-            Column(modifier = Modifier.padding(start = 12.dp)) {
-                if (invitesForMe > 0) {
-                    Text(
-                        if (invitesForMe == 1) "1 invitation waiting for you"
-                        else "$invitesForMe invitations waiting for you",
-                        style = MaterialTheme.typography.titleSmall,
-                    )
-                }
-                if (invitesSent > 0) {
-                    Text(
-                        if (invitesSent == 1) "1 sent invite awaiting acceptance"
-                        else "$invitesSent sent invites awaiting acceptance",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                }
-            }
+        if (invitesForMe > 0) {
+            LabelCaps(
+                if (invitesForMe == 1) "1 invitation waiting for you"
+                else "$invitesForMe invitations waiting for you",
+                ParityThemeDefaults.colors.pending,
+            )
+        }
+        if (invitesSent > 0) {
+            Text(
+                if (invitesSent == 1) "1 sent invite awaiting acceptance"
+                else "$invitesSent sent invites awaiting acceptance",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
 @Composable
-private fun HomeRelationshipRow(rel: HomeRelationship, onClick: () -> Unit) {
+private fun PeopleSection(
+    relationships: List<HomeRelationship>,
+    onViewAll: () -> Unit,
+    onOpen: (Long) -> Unit,
+) {
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "People",
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onViewAll) { Text("View all") }
+        }
+        relationships.forEachIndexed { index, rel ->
+            if (index > 0) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
+            PersonRow(rel = rel, onClick = { onOpen(rel.id) })
+        }
+    }
+}
+
+@Composable
+private fun PersonRow(rel: HomeRelationship, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .heightIn(min = 48.dp)
+            .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        InitialsAvatar(name = rel.counterpartyName, size = 36.dp)
+        InitialsAvatar(name = rel.counterpartyName, size = 34.dp)
         Text(
             rel.counterpartyName,
             style = MaterialTheme.typography.bodyLarge,
@@ -311,15 +359,10 @@ private fun HomeRelationshipRow(rel: HomeRelationship, onClick: () -> Unit) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            net > 0L -> Text(
-                formatCents(net, rel.currencyCode),
-                style = MaterialTheme.typography.titleSmall,
-                color = ParityThemeDefaults.colors.positive,
-            )
             else -> Text(
-                formatCents(net, rel.currencyCode),
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.error,
+                formatCents(net.absoluteValue, rel.currencyCode),
+                style = ParityMoney.row,
+                color = moneyColor(net),
             )
         }
     }
