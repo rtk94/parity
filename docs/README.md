@@ -18,3 +18,4 @@ Parity is designed for fair and transparent financial tracking between two parti
 - [Getting Started](GETTING_STARTED.md): Setup instructions for the backend and Android client.
 - [Architecture](ARCHITECTURE.md): Detailed overview of the system architecture, data models, and Android app structure.
 - [API Reference](API_REFERENCE.md): Documentation of the RESTful API endpoints.
+- [Deployment](DEPLOYMENT.md): How prod and staging run on the VPS (native gunicorn + nginx + certbot), and how to deploy.
