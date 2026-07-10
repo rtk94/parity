@@ -18,9 +18,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -43,6 +45,7 @@ import com.rknepp.parity.ui.theme.ParityThemeDefaults
 import java.time.LocalTime
 import kotlin.math.absoluteValue
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     onNavigateToRelationships: () -> Unit,
@@ -52,6 +55,7 @@ fun HomeScreen(
     val locator = LocalServiceLocator.current
     val vm: HomeViewModel = viewModel(factory = HomeViewModel.factory(locator))
     val state by vm.state.collectAsState()
+    val isRefreshing by vm.isRefreshing.collectAsState()
 
     // Keep the dashboard current when returning from other screens.
     LifecycleResumeEffect(Unit) {
@@ -88,6 +92,13 @@ fun HomeScreen(
                         )
                     }
                 } else {
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = vm::pullRefresh,
+                        modifier = Modifier
+                            .padding(padding)
+                            .fillMaxSize(),
+                    ) {
                     DashboardContent(
                         data = s.data,
                         onConfirm = vm::confirm,
@@ -95,11 +106,11 @@ fun HomeScreen(
                         onNavigateToRelationships = onNavigateToRelationships,
                         onNavigateToRelationshipDetail = onNavigateToRelationshipDetail,
                         modifier = Modifier
-                            .padding(padding)
                             .fillMaxSize()
                             .verticalScroll(rememberScrollState())
                             .padding(horizontal = 24.dp),
                     )
+                    }
                 }
             }
         }
