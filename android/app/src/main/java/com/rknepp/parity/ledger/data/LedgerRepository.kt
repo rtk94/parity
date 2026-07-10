@@ -7,12 +7,17 @@ import com.rknepp.parity.ledger.data.dto.ExpenseDto
 import com.rknepp.parity.ledger.data.dto.ExpenseListResponse
 import com.rknepp.parity.ledger.data.dto.PaymentDto
 import com.rknepp.parity.ledger.data.dto.PaymentListResponse
+import com.rknepp.parity.ledger.data.dto.PendingResponse
 import com.rknepp.parity.network.ApiResult
 import com.rknepp.parity.network.apiCall
 
 class LedgerRepository(
     private val apiProvider: () -> LedgerApi,
 ) {
+    suspend fun listPending(): ApiResult<PendingResponse> = apiCall {
+        apiProvider().listPending()
+    }
+
     suspend fun listExpenses(relationshipId: Long): ApiResult<ExpenseListResponse> = apiCall {
         apiProvider().listExpenses(relationshipId)
     }

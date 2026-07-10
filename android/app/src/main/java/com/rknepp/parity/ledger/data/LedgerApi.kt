@@ -7,6 +7,7 @@ import com.rknepp.parity.ledger.data.dto.ExpenseDto
 import com.rknepp.parity.ledger.data.dto.ExpenseListResponse
 import com.rknepp.parity.ledger.data.dto.PaymentDto
 import com.rknepp.parity.ledger.data.dto.PaymentListResponse
+import com.rknepp.parity.ledger.data.dto.PendingResponse
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -15,6 +16,9 @@ import retrofit2.http.Path
 import retrofit2.http.Query
 
 interface LedgerApi {
+    @GET("api/v1/pending")
+    suspend fun listPending(): Response<PendingResponse>
+
     @GET("api/v1/expenses")
     suspend fun listExpenses(
         @Query("relationship_id") relationshipId: Long,
