@@ -197,6 +197,32 @@ def list_for_user(
     return items, total
 
 
+def list_awaiting_confirmation(user: User) -> list[Expense]:
+    """Pending expenses the counterparty (``user``) must act on.
+
+    Scoped to accepted relationships the user is a party to, restricted to
+    entries the *other* party created (a user never confirms their own).
+    Reversals are included — they, too, wait on confirmation. Newest first.
+    """
+    accepted_rel_ids = select(Relationship.id).where(
+        Relationship.status == RelationshipStatus.accepted,
+        or_(
+            Relationship.inviting_user_id == user.id,
+            Relationship.invited_user_id == user.id,
+        ),
+    )
+    stmt = (
+        select(Expense)
+        .where(
+            Expense.relationship_id.in_(accepted_rel_ids),
+            Expense.status == ExpenseStatus.pending,
+            Expense.created_by_user_id != user.id,
+        )
+        .order_by(Expense.created_at.desc(), Expense.id.desc())
+    )
+    return list(db.session.execute(stmt).scalars().all())
+
+
 def get_for_user(user: User, expense_id: int) -> Expense:
     expense = db.session.get(Expense, expense_id)
     if expense is None:

@@ -64,7 +64,14 @@ def create_app(
 
     # Import models so SQLAlchemy + Alembic see them.
     from app import models  # noqa: F401
-    from app.api import admin_bp, expenses_bp, health_bp, payments_bp, relationships_bp
+    from app.api import (
+        admin_bp,
+        expenses_bp,
+        health_bp,
+        payments_bp,
+        pending_bp,
+        relationships_bp,
+    )
     from app.auth import auth_bp
     from app.cli import cli_bp
 
@@ -73,6 +80,7 @@ def create_app(
     app.register_blueprint(relationships_bp)
     app.register_blueprint(expenses_bp)
     app.register_blueprint(payments_bp)
+    app.register_blueprint(pending_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(cli_bp)
 

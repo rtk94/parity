@@ -139,6 +139,32 @@ def list_for_user(
     return items, total
 
 
+def list_awaiting_confirmation(user: User) -> list[Payment]:
+    """Pending payments the counterparty (``user``) must act on.
+
+    Scoped to accepted relationships the user is a party to, restricted to
+    entries the *other* party created (a user never confirms their own).
+    Reversals are included — they, too, wait on confirmation. Newest first.
+    """
+    accepted_rel_ids = select(Relationship.id).where(
+        Relationship.status == RelationshipStatus.accepted,
+        or_(
+            Relationship.inviting_user_id == user.id,
+            Relationship.invited_user_id == user.id,
+        ),
+    )
+    stmt = (
+        select(Payment)
+        .where(
+            Payment.relationship_id.in_(accepted_rel_ids),
+            Payment.status == PaymentStatus.pending,
+            Payment.created_by_user_id != user.id,
+        )
+        .order_by(Payment.created_at.desc(), Payment.id.desc())
+    )
+    return list(db.session.execute(stmt).scalars().all())
+
+
 def get_for_user(user: User, payment_id: int) -> Payment:
     payment = db.session.get(Payment, payment_id)
     if payment is None:
