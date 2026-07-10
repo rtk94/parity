@@ -11,12 +11,8 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 
 /**
- * Colors Material's scheme has no role for: the "owed to you" green,
- * the pending amber, and the avatar tint pool. Accessed via
- * [ParityThemeDefaults.colors].
- *
- * `avatarPool` is retained from Phase 8 so [com.rknepp.parity.ui.components.InitialsAvatar]
- * keeps compiling; it retires when avatars move to the Paper ink-outline style.
+ * Colors Material's scheme has no role for: the "owed to you" green and
+ * the pending amber. Accessed via [ParityThemeDefaults.colors].
  */
 @Immutable
 data class ParityExtendedColors(
@@ -24,7 +20,6 @@ data class ParityExtendedColors(
     val positiveContainer: Color,
     val pending: Color,
     val pendingContainer: Color,
-    val avatarPool: List<Color>,
 )
 
 private val LightExtended = ParityExtendedColors(
@@ -32,7 +27,6 @@ private val LightExtended = ParityExtendedColors(
     positiveContainer = GreenContainerLight,
     pending = AmberLight,
     pendingContainer = AmberContainerLight,
-    avatarPool = AvatarPoolLight,
 )
 
 private val DarkExtended = ParityExtendedColors(
@@ -40,7 +34,6 @@ private val DarkExtended = ParityExtendedColors(
     positiveContainer = GreenContainerDark,
     pending = AmberDark,
     pendingContainer = AmberContainerDark,
-    avatarPool = AvatarPoolDark,
 )
 
 val LocalParityExtendedColors = staticCompositionLocalOf { LightExtended }
@@ -54,6 +47,8 @@ object ParityThemeDefaults {
 private val LightColorScheme = lightColorScheme(
     primary = InkLight,
     onPrimary = OnInkLight,
+    primaryContainer = TrackLight,
+    onPrimaryContainer = InkLight,
     secondary = MutedLight,
     onSecondary = OnInkLight,
     secondaryContainer = TrackLight,
@@ -65,6 +60,7 @@ private val LightColorScheme = lightColorScheme(
     error = RedLight,
     onError = OnInkLight,
     errorContainer = RedContainerLight,
+    onErrorContainer = RedLight,
     background = PaperLight,
     onBackground = InkLight,
     surface = PaperLight,
@@ -73,11 +69,28 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = MutedLight,
     outline = RuleStrongLight,
     outlineVariant = RuleLight,
+    // Tonal surface-container ramp (used by NavigationBar, menus, etc.)
+    // and the inverse roles (Snackbars) — mapped to Paper tones so
+    // nothing falls back to Material's baseline lavender. surfaceTint is
+    // transparent to keep elevated surfaces flat, per the Paper spec.
+    surfaceTint = Color.Transparent,
+    surfaceBright = PaperRaisedLight,
+    surfaceDim = RuleLight,
+    surfaceContainerLowest = PaperRaisedLight,
+    surfaceContainerLow = PaperLight,
+    surfaceContainer = TrackLight,
+    surfaceContainerHigh = RuleLight,
+    surfaceContainerHighest = RuleStrongLight,
+    inverseSurface = InkLight,
+    inverseOnSurface = PaperLight,
+    inversePrimary = GreenDark,
 )
 
 private val DarkColorScheme = darkColorScheme(
     primary = InkDark,
     onPrimary = OnInkDark,
+    primaryContainer = TrackDark,
+    onPrimaryContainer = InkDark,
     secondary = MutedDark,
     onSecondary = OnInkDark,
     secondaryContainer = TrackDark,
@@ -89,6 +102,7 @@ private val DarkColorScheme = darkColorScheme(
     error = RedDark,
     onError = OnInkDark,
     errorContainer = RedContainerDark,
+    onErrorContainer = RedDark,
     background = PaperDark,
     onBackground = InkDark,
     surface = PaperDark,
@@ -97,6 +111,18 @@ private val DarkColorScheme = darkColorScheme(
     onSurfaceVariant = MutedDark,
     outline = RuleStrongDark,
     outlineVariant = RuleDark,
+    // See LightColorScheme for the rationale behind these roles.
+    surfaceTint = Color.Transparent,
+    surfaceBright = RuleStrongDark,
+    surfaceDim = PaperDark,
+    surfaceContainerLowest = PaperDark,
+    surfaceContainerLow = PaperRaisedDark,
+    surfaceContainer = PaperRaisedDark,
+    surfaceContainerHigh = RuleDark,
+    surfaceContainerHighest = RuleStrongDark,
+    inverseSurface = InkDark,
+    inverseOnSurface = PaperDark,
+    inversePrimary = GreenLight,
 )
 
 /**

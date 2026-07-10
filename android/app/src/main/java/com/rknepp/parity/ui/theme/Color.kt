@@ -36,24 +36,3 @@ val TrackDark = Color(0xFF211F16)
 val RuleDark = Color(0xFF2C2A20)
 val RuleStrongDark = Color(0xFF33301F)
 val OnInkDark = Color(0xFF17160F)
-
-// Avatar tint pool: stable per-name colors for initials avatars.
-// Retained from the Phase 8 theme so InitialsAvatar keeps working; the
-// Paper spec moves avatars to transparent-fill ink outlines, at which
-// point this pool and the ParityExtendedColors.avatarPool role retire.
-val AvatarPoolLight = listOf(
-    Color(0xFF00696D),
-    Color(0xFF745B00),
-    Color(0xFF8E4956),
-    Color(0xFF3B6939),
-    Color(0xFF5D5791),
-    Color(0xFF8D4E2A),
-)
-val AvatarPoolDark = listOf(
-    Color(0xFF80D4D9),
-    Color(0xFFEBC248),
-    Color(0xFFFFB1C0),
-    Color(0xFFA1D399),
-    Color(0xFFC7BFFF),
-    Color(0xFFFFB68E),
-)
