@@ -53,6 +53,7 @@ class RelationshipDetailViewModelTest {
         var listExpensesResponse: Response<com.rknepp.parity.ledger.data.dto.ExpenseListResponse>? = null
         var listPaymentsResponse: Response<com.rknepp.parity.ledger.data.dto.PaymentListResponse>? = null
         override suspend fun listExpenses(relationshipId: Long, limit: Int, offset: Int) = listExpensesResponse ?: Response.success(com.rknepp.parity.ledger.data.dto.ExpenseListResponse(emptyList(), 0, 100, 0))
+        override suspend fun listPending() = Response.success(com.rknepp.parity.ledger.data.dto.PendingResponse(emptyList(), emptyList()))
         override suspend fun createExpense(request: com.rknepp.parity.ledger.data.dto.CreateExpenseRequest) = error("unused")
         override suspend fun confirmExpense(id: Long) = error("unused")
         override suspend fun discardExpense(id: Long, request: com.rknepp.parity.ledger.data.dto.DiscardRequest) = error("unused")
