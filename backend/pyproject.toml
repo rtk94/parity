@@ -7,7 +7,7 @@ name = "parity-backend"
 version = "0.1.0"
 description = "Parity: a self-hosted two-party expense and payment tracking ledger (backend)."
 requires-python = ">=3.12"
-license = { text = "MIT" }
+license = { text = "Apache-2.0" }
 dependencies = [
     "Flask>=3.0",
     "Flask-SQLAlchemy>=3.1",
