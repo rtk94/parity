@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class SettingsState(
+    val profileLoaded: Boolean = false,
     val username: String = "",
     val displayName: String = "",
     val isSavingProfile: Boolean = false,
@@ -59,6 +60,7 @@ class SettingsViewModel(
             if (result is ApiResult.Success) {
                 _state.update {
                     it.copy(
+                        profileLoaded = true,
                         username = result.data.username,
                         displayName = result.data.displayName,
                         isAdmin = result.data.isAdmin,

@@ -26,14 +26,6 @@ Currently a forgotten password is unrecoverable without server-side DB
 access. A reset flow would require an email or recovery channel that
 does not exist yet. Deferred from Phase 4.
 
-### Audit logging
-
-Beyond the timestamps already captured by the ledger model
-(`created_at`, `confirmed_at`, `discarded_at`, and the various
-`*_by_user_id` columns), there is no log of who-did-what-when at the
-request level. A structured audit log would help forensics if anything
-goes wrong. Deferred from Phase 3.
-
 ### Categories or tags on expenses
 
 Free-form or controlled-vocabulary categorization of expenses, useful
@@ -48,11 +40,6 @@ from Phase 2.
 
 Receipt photos or other supporting files attached to an expense.
 Deferred from Phase 2.
-
-### Comments on ledger entries
-
-Free-text comments on confirmed or pending entries, distinct from the
-immutable `description` field. Deferred from Phase 2.
 
 ## Android
 

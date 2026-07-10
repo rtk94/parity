@@ -8,25 +8,25 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -36,6 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -46,6 +48,7 @@ import com.rknepp.parity.ui.components.EmptyState
 import com.rknepp.parity.ui.components.ErrorState
 import com.rknepp.parity.ui.components.InitialsAvatar
 import com.rknepp.parity.ui.components.LoadingState
+import com.rknepp.parity.ui.theme.ParityMoney
 import com.rknepp.parity.ui.theme.ParityThemeDefaults
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -59,6 +62,7 @@ fun RelationshipListScreen(
         viewModel(factory = RelationshipListViewModel.factory(locator))
     val state by vm.state.collectAsState()
     val actionError by vm.actionError.collectAsState()
+    val isRefreshing by vm.isRefreshing.collectAsState()
 
     val snackbarHostState = remember { SnackbarHostState() }
     var confirmRejectRow by remember { mutableStateOf<RelationshipRow?>(null) }
@@ -98,13 +102,16 @@ fun RelationshipListScreen(
     }
 
     Scaffold(
-        topBar = {
-            TopAppBar(title = { Text("Relationships") })
-        },
+        topBar = { TopAppBar(title = { Text("People") }) },
         snackbarHost = { SnackbarHost(snackbarHostState) },
         floatingActionButton = {
-            FloatingActionButton(onClick = onNavigateToCreate) {
-                Icon(Icons.Filled.Add, contentDescription = "Add Relationship")
+            FloatingActionButton(
+                onClick = onNavigateToCreate,
+                containerColor = MaterialTheme.colorScheme.tertiary,
+                contentColor = MaterialTheme.colorScheme.onTertiary,
+                elevation = FloatingActionButtonDefaults.elevation(0.dp, 0.dp, 0.dp, 0.dp),
+            ) {
+                Icon(Icons.Filled.Add, contentDescription = "Add person")
             }
         },
     ) { padding ->
@@ -117,33 +124,41 @@ fun RelationshipListScreen(
                 RelationshipListState.Loading -> LoadingState()
                 RelationshipListState.Empty -> EmptyState(
                     icon = Icons.Default.Person,
-                    title = "No relationships yet",
+                    title = "No people yet",
                     body = "Invite someone to start tracking shared expenses and payments together.",
                     actionLabel = "Invite someone",
                     onAction = onNavigateToCreate,
                 )
                 RelationshipListState.Error -> ErrorState(
-                    message = "Couldn't load your relationships.",
+                    message = "Couldn't load your people.",
                     onRetry = { vm.reload() },
                 )
                 is RelationshipListState.Loaded -> {
-                    LazyColumn(
-                        contentPadding = PaddingValues(
-                            start = 16.dp,
-                            end = 16.dp,
-                            top = 8.dp,
-                            bottom = 96.dp,
-                        ),
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                    PullToRefreshBox(
+                        isRefreshing = isRefreshing,
+                        onRefresh = vm::pullRefresh,
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        items(s.rows, key = { it.id }) { row ->
-                            RelationshipRowCard(
-                                row = row,
-                                onClick = { onNavigateToDetail(row.id) },
-                                onAccept = { vm.accept(row.id) },
-                                onReject = { confirmRejectRow = row },
-                            )
+                        LazyColumn(
+                            contentPadding = PaddingValues(
+                                start = 24.dp,
+                                end = 24.dp,
+                                top = 8.dp,
+                                bottom = 96.dp,
+                            ),
+                            modifier = Modifier.fillMaxSize(),
+                        ) {
+                            itemsIndexed(s.rows, key = { _, row -> row.id }) { index, row ->
+                                if (index > 0) {
+                                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                }
+                                RelationshipRow(
+                                    row = row,
+                                    onClick = { onNavigateToDetail(row.id) },
+                                    onAccept = { vm.accept(row.id) },
+                                    onReject = { confirmRejectRow = row },
+                                )
+                            }
                         }
                     }
                 }
@@ -153,25 +168,20 @@ fun RelationshipListScreen(
 }
 
 @Composable
-fun RelationshipRowCard(
+private fun RelationshipRow(
     row: RelationshipRow,
     onClick: () -> Unit,
     onAccept: () -> Unit,
     onReject: () -> Unit,
 ) {
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            .clickable(onClick = onClick)
+            .padding(vertical = 13.dp),
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            InitialsAvatar(name = row.counterpartyName)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InitialsAvatar(name = row.counterpartyName, size = 34.dp)
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -180,14 +190,18 @@ fun RelationshipRowCard(
                 Text(row.counterpartyName, style = MaterialTheme.typography.titleMedium)
                 Text(
                     "@${row.counterpartyUsername}",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
                 if (row.status == "pending") {
                     Text(
                         text = if (row.canAccept) "Invited you" else "Invite sent",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.secondary,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = if (row.canAccept) {
+                            ParityThemeDefaults.colors.pending
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
                         modifier = Modifier.padding(top = 2.dp),
                     )
                 }
@@ -199,25 +213,41 @@ fun RelationshipRowCard(
         }
         if (row.canAccept || row.canReject) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(top = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                if (row.canReject) {
-                    OutlinedButton(onClick = onReject, modifier = Modifier.padding(end = 8.dp)) {
-                        Text(if (row.canAccept) "Decline" else "Cancel invite")
-                    }
-                }
                 if (row.canAccept) {
-                    Button(onClick = onAccept) {
-                        Text("Accept")
-                    }
+                    RowTextAction("Accept", MaterialTheme.colorScheme.tertiary, bold = true, onAccept)
+                }
+                if (row.canReject) {
+                    RowTextAction(
+                        if (row.canAccept) "Decline" else "Cancel invite",
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                        onClick = onReject,
+                    )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun RowTextAction(
+    label: String,
+    color: Color,
+    bold: Boolean = false,
+    onClick: () -> Unit,
+) {
+    Text(
+        label,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
+        color = color,
+        modifier = Modifier
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
+    )
 }
 
 @Composable
@@ -226,7 +256,7 @@ private fun BalanceSummaryText(row: RelationshipRow) {
     when {
         row.status != "accepted" || net == null -> {}
         net == 0L -> Text(
-            "Settled up",
+            "Settled",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -238,7 +268,7 @@ private fun BalanceSummaryText(row: RelationshipRow) {
             )
             Text(
                 formatCents(net, row.currencyCode),
-                style = MaterialTheme.typography.titleMedium,
+                style = ParityMoney.row,
                 color = ParityThemeDefaults.colors.positive,
             )
         }
@@ -250,7 +280,7 @@ private fun BalanceSummaryText(row: RelationshipRow) {
             )
             Text(
                 formatCents(-net, row.currencyCode),
-                style = MaterialTheme.typography.titleMedium,
+                style = ParityMoney.row,
                 color = MaterialTheme.colorScheme.error,
             )
         }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -12,8 +13,10 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -35,6 +38,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rknepp.parity.app.LocalServiceLocator
 import com.rknepp.parity.relationships.ui.formatCents
 import com.rknepp.parity.ui.components.LoadingState
+import com.rknepp.parity.ui.theme.ParityMoney
+import com.rknepp.parity.ui.theme.ParityThemeDefaults
+import com.rknepp.parity.ui.theme.PillShape
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,7 +79,7 @@ fun CreatePaymentScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(16.dp),
+                        .padding(24.dp),
                 ) {
                     Text(
                         text = state.error!!,
@@ -100,11 +106,15 @@ private fun CreatePaymentForm(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .padding(16.dp)
+            .padding(horizontal = 24.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+        SingleChoiceSegmentedButtonRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
+        ) {
             SegmentedButton(
                 selected = state.isUserPaying,
                 onClick = { vm.setIsUserPaying(true) },
@@ -151,24 +161,15 @@ private fun CreatePaymentForm(
             )
         }
 
-        val amountText =
-            if (state.amountCents > 0) formatCents(state.amountCents, state.currencyCode)
-            else "this payment"
-        Text(
-            text = if (state.isUserPaying) {
-                "Records that you paid $amountText to ${state.counterpartyName}. " +
-                    "They'll be asked to confirm it."
-            } else {
-                "Records that ${state.counterpartyName} paid $amountText to you. " +
-                    "They'll be asked to confirm it."
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        PaymentOutcome(state = state)
 
         Button(
             onClick = vm::submit,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = PillShape,
+            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
             enabled = !state.isSubmitting &&
                 state.amountCents > 0 &&
                 state.description.isNotBlank(),
@@ -179,8 +180,45 @@ private fun CreatePaymentForm(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             } else {
-                Text("Save payment")
+                Text("Log payment", style = MaterialTheme.typography.labelLarge)
             }
+        }
+    }
+}
+
+/** Live outcome line: who paid whom, with a serif amount once entered. */
+@Composable
+private fun PaymentOutcome(state: CreatePaymentState) {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Column(modifier = Modifier.padding(top = 16.dp)) {
+        if (state.amountCents <= 0L) {
+            Text(
+                "Enter an amount. The payment stays pending until " +
+                    "${state.counterpartyName} confirms it.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                if (state.isUserPaying) {
+                    "You paid ${state.counterpartyName}"
+                } else {
+                    "${state.counterpartyName} paid you"
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                formatCents(state.amountCents, state.currencyCode),
+                style = ParityMoney.screen,
+                color = ParityThemeDefaults.colors.positive,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                "pending until ${state.counterpartyName} confirms",
+                style = MaterialTheme.typography.bodyMedium,
+                color = ParityThemeDefaults.colors.pending,
+            )
         }
     }
 }
