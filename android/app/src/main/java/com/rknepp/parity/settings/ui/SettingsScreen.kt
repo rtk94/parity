@@ -131,21 +131,28 @@ fun SettingsScreen() {
             // Profile
             Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                 LabelCaps("Profile", MaterialTheme.colorScheme.onSurfaceVariant)
-                val shownName =
-                    if (state.displayName.isBlank()) state.username else state.displayName
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    InitialsAvatar(name = shownName)
-                    Column(modifier = Modifier.padding(start = 12.dp)) {
-                        Text(
-                            if (shownName.isBlank()) "…" else shownName,
-                            style = MaterialTheme.typography.titleMedium,
-                        )
-                        Text(
-                            "@${state.username}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                // Reserve the identity-row height while the profile loads so
+                // the layout doesn't jump — and so we never flash a "?"
+                // avatar or "…" placeholder name.
+                if (state.profileLoaded) {
+                    val shownName =
+                        if (state.displayName.isBlank()) state.username else state.displayName
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        InitialsAvatar(name = shownName)
+                        Column(modifier = Modifier.padding(start = 12.dp)) {
+                            Text(
+                                shownName,
+                                style = MaterialTheme.typography.titleMedium,
+                            )
+                            Text(
+                                "@${state.username}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
+                } else {
+                    Spacer(modifier = Modifier.height(44.dp))
                 }
 
                 OutlinedTextField(
