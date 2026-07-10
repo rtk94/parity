@@ -80,15 +80,33 @@ curl -s https://api.parity.rknepp.com/api/v1/health   # expect {"status":"ok",..
 
 ## Backups
 
-The production ledger lives in a single SQLite file
-(`/var/www/parity/backend/instance/parity.db`). Take a consistent
-snapshot with the SQLite backup API before any migration or deploy:
+The production ledger is a single SQLite file
+(`/var/www/parity/backend/instance/parity.db`), protected by two layers.
+
+**On-box (automated).** `parity-backup.timer` runs
+[`scripts/parity-backup.sh`](../scripts/parity-backup.sh) (installed at
+`/usr/local/bin/parity-backup`) daily at 03:17 UTC. Each run takes an
+online `sqlite3 .backup` snapshot (safe while gunicorn serves), verifies
+it with `PRAGMA integrity_check`, gzips it into `/var/backups/parity/`
+(root-only), and prunes local copies older than 14 days.
+
+**Off-box (automated).** A pull host runs
+[`scripts/parity-backup-pull.sh`](../scripts/parity-backup-pull.sh) on a
+systemd **user** timer (`Persistent=true` + linger), which rsyncs
+`/var/backups/parity/` off the server over SSH — elevating via the
+server's passwordless sudo to read the root-only files — and keeps 90
+days. This currently targets a desktop, so it is a *best-effort* copy;
+see the follow-up below.
+
+Take a snapshot or restore-check by hand:
 
 ```bash
-sqlite3 /var/www/parity/backend/instance/parity.db \
-  ".backup '/var/backups/parity-$(date +%F-%H%M).db'"
+sudo /usr/local/bin/parity-backup                        # snapshot now
+latest=$(sudo ls -1t /var/backups/parity/*.db.gz | head -1)
+sudo bash -c "gunzip -c '$latest' > /tmp/r.db && sqlite3 /tmp/r.db 'PRAGMA integrity_check;'; rm -f /tmp/r.db"
 ```
 
-> **TODO:** automate this on a schedule (cron/systemd timer) with
-> off-box retention. Regular, tested, off-host backups are a
-> prerequisite for real user data — treat this as a launch blocker.
+> **Follow-up:** the off-box copy depends on the desktop being on.
+> Upgrade it to a durable off-site store — OCI Object Storage (the box
+> is an OCI instance) with an instance principal, lifecycle retention,
+> and a periodic automated restore test.
