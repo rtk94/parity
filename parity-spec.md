@@ -1,8 +1,12 @@
 # Parity: Complete Application Specification
 
-This document is a self-contained specification for the Parity application as designed and implemented through Phase 6. A capable model with this document should be able to reproduce the entire application with the same architectural decisions, conventions, and behaviors.
+This document is a self-contained specification for the Parity application. A capable model with this document should be able to reproduce the entire application with the same architectural decisions, conventions, and behaviors.
 
-> **Status note (current as of the Paper overhaul).** This spec is a point-in-time snapshot through **Phase 6** and has not been rewritten since. The backend contract in §3–§4 remains accurate, but the Android client has since gained the Phase 7 ledger UI, the Phase 8 dashboard/settings overhaul, an admin panel, and — most visibly — the **"Paper" design system** (ink-on-warm-paper palette with a single forest-green accent and an amber pending channel; Spectral serif for titles/money and Hanken Grotesk for UI, bundled offline; pill controls and a flat editorial layout; light/dark). For the current Android state see [`README.md`](README.md), [`android/README.md`](android/README.md), and the Phase status in [`CLAUDE.md`](CLAUDE.md). A full refresh of §5 (Android Client) to cover Phases 7–8 and Paper is tracked as follow-up work.
+> **Currency.** This spec tracks the app through the Phase 7/8 Android
+> ledger UI, the admin system, and the **"Paper" design system** (see
+> §5.4). The backend contract in §3–§4 and the Android client in §5
+> reflect the current implementation. The per-phase history lives in
+> the Phase status section of [`CLAUDE.md`](CLAUDE.md).
 
 ---
 
@@ -42,10 +46,10 @@ backend/
 │   ├── config.py                (Config, DevelopmentConfig, TestingConfig, ProductionConfig)
 │   ├── extensions.py            (db, migrate, limiter instances)
 │   ├── errors.py                (JSON error handlers for 400/401/403/404/409/422/429/500)
-│   ├── models/                  (user.py, relationship.py, expense.py, payment.py, auth_token.py)
-│   ├── auth/                    (tokens.py for hashing/expiry, decorators.py for @login_required)
-│   ├── api/                     (health.py, auth_routes.py, relationships.py, expenses.py, payments.py)
-│   └── services/                (business logic: relationships.py, expenses.py, payments.py, balance.py)
+│   ├── models/                  (user, relationship, expense, expense_share, payment, comment, auth_token, audit)
+│   ├── auth/                    (routes.py, security.py for hashing/expiry, decorators.py for @login_required)
+│   ├── api/                     (health, relationships, expenses, payments, pending, admin + cli.py)
+│   └── services/                (business logic: relationships, expenses, payments, balance, comments, admin, audit)
 └── tests/                       (test_health.py, test_auth.py, test_models.py, test_relationships.py, etc.)
 ```
 
@@ -56,13 +60,24 @@ android/app/src/main/java/com/rknepp/parity/
 ├── app/                         (MainActivity.kt, ParityApp.kt)
 ├── auth/
 │   ├── data/                    (AuthApi.kt, AuthRepository.kt, dto/)
-│   ├── ui/                      (connect/, login/, register/ screens + viewmodels)
+│   ├── ui/                      (login/, register/ screens + viewmodels)
 │   └── events/                  (AuthEventBus.kt)
-├── home/                        (data/MeRepository.kt, ui/HomeScreen.kt, model/UserSummary.kt)
+├── home/                        (data/MeRepository.kt, ui/HomeScreen.kt — dashboard)
+├── relationships/               (data/, ui/ — list "People", detail ledger, create-invite)
+├── ledger/                      (ui/ — CreateExpenseScreen, CreatePaymentScreen + split math)
+├── settings/                    (ui/SettingsScreen.kt — profile, password, admin panel)
+├── admin/                       (data/AdminRepository.kt — admin API client)
+├── main/                        (ui/MainScreen.kt — bottom-nav host: Home/Relationships/Settings)
 ├── network/                     (ApiResult.kt, ApiError.kt, AuthInterceptor.kt, TokenAuthenticator.kt)
-├── storage/                     (ServerUrlStore.kt, SecureTokenStore.kt, TinkAeadProvider.kt)
+├── storage/                     (SecureTokenStore.kt, TinkAeadProvider.kt)
+├── ui/
+│   ├── theme/                   (Color.kt, Type.kt, Shape.kt, Theme.kt — the Paper design system)
+│   └── components/              (Avatar, StatusChip, ConfirmDialog, Feedback, ParityLogo, DateFormat)
 └── navigation/                  (Route.kt, ParityNavHost.kt)
 ```
+
+The server URL is a compile-time `BASE_URL` build-config field (see
+§5.3); there is no in-app connect screen or `ServerUrlStore`.
 
 ---
 
@@ -72,15 +87,17 @@ android/app/src/main/java/com/rknepp/parity/
 **Token generation:** `secrets.token_urlsafe(32)`. Storage: SHA-256 hex hash of the raw token. Raw token returned exactly once.
 
 ### 3.1 Data Models (SQLAlchemy 2.0)
-- **User:** `id`(PK), `username`(str64, UQ), `password_hash`(str255), `display_name`(str128), `created_at`.
+- **User:** `id`(PK), `username`(str64, UQ), `password_hash`(str255), `display_name`(str128), `is_admin`(bool, default false), `created_at`.
 - **Relationship:** `id`(PK), `inviting_user_id`(FK), `invited_user_id`(FK), `status`('pending','accepted','rejected', default 'pending'), `currency_code`(str3), `created_at`.
   - **Constraints:** CHECK `inviting_user_id != invited_user_id`, CHECK `currency_code GLOB '[A-Z][A-Z][A-Z]'`, UNIQUE `(inviting_user_id, invited_user_id)`. Partial unique index ensures max 1 non-rejected relationship per user pair regardless of direction.
-- **Expense:** `id`(PK), `payer_user_id`(FK), `relationship_id`(FK), `total_cents`(>0), `description`(str512), `created_by_user_id`(FK), `created_at`, `status`('pending','confirmed','discarded'), `confirmed_at/by`, `discarded_at/by`, `rejection_reason`(str512), `reverses_expense_id`(FK).
+- **Expense:** `id`(PK), `payer_user_id`(FK), `relationship_id`(FK), `total_cents`(>0), `description`(str512), `category`(str64, nullable), `created_by_user_id`(FK), `created_at`, `status`('pending','confirmed','discarded'), `confirmed_at/by`, `discarded_at/by`, `rejection_reason`(str512), `reverses_expense_id`(FK).
   - **Constraints:** `confirmed_by_user_id IS NULL OR confirmed_by_user_id != created_by_user_id`.
 - **ExpenseShare:** `id`(PK), `expense_id`(FK), `user_id`(FK), `amount_cents`(>0). UNIQUE `(expense_id, user_id)`. Application-layer enforces share sum == total_cents.
 - **Payment:** `id`(PK), `from_user_id`(FK), `to_user_id`(FK), `relationship_id`(FK), `amount_cents`(>0), `description`(str512), `created_by_user_id`(FK), `created_at`, `status`, `confirmed_at/by`, `discarded_at/by`, `rejection_reason`, `reverses_payment_id`(FK).
   - **Constraints:** `from_user_id != to_user_id`; `confirmed_by_user_id != created_by_user_id`.
 - **AuthToken:** `id`(PK), `user_id`(FK), `token_hash`(str64, UQ, INDEXED), `created_at`, `last_used_at`, `revoked_at`, `expires_at`.
+- **Comment:** `id`(PK), `user_id`(FK), `expense_id`(FK, nullable), `payment_id`(FK, nullable), `content`(str512), `created_at`. Attached to exactly one of an expense or a payment.
+- **AuditLog** (`audit_log`): `id`(PK), `user_id`(FK, INDEXED), `action`(str64), `target_type`(str64), `target_id`(int), `details`(text, nullable), `created_at`. Request-level record surfaced in `GET /admin/stats`.
 
 ### 3.2 Configuration & Rate Limiting
 - **Config classes:** `Config`, `DevelopmentConfig`, `TestingConfig` (disables rate limits, uses `:memory:` DB), `ProductionConfig`.
@@ -109,7 +126,8 @@ BEFORE UPDATE/DELETE triggers enforce invariants directly in the database:
 - `POST /api/v1/auth/register`: -> 201. Error: 409 `username_taken`.
 - `POST /api/v1/auth/login`: -> 200 `{token, user}`. Error: 401 `invalid_credentials`.
 - `POST /api/v1/auth/logout`: -> 204. Sets `revoked_at = now()`.
-- `GET /api/v1/auth/me`: -> 200 user.
+- `GET /api/v1/auth/me`: -> 200 user (private dict).
+- `PATCH /api/v1/auth/me`: -> 200 user. Updates `display_name`. Error: 422 `invalid_display_name` (empty/blank). Rate-limited.
 - `POST /api/v1/auth/change-password`: -> 204. Updates hash, revokes all other tokens for user.
 - `POST /api/v1/auth/refresh`: -> 200. Issues new token, revokes old token.
 
@@ -127,9 +145,22 @@ BEFORE UPDATE/DELETE triggers enforce invariants directly in the database:
 ### 4.4 Expense / Payment Endpoints
 - Create requires `relationship.status == 'accepted'`.
 - **Expense Shape:** `{"id": 42, "relationship_id": 1, "payer_user_id": 5, "total_cents": 5000, "shares": [{"user_id": 5, "amount_cents": 2500}, {"user_id": 7, "amount_cents": 2500}], "status": "pending"...}`
+- `GET /api/v1/expenses` and `GET /api/v1/payments`: Scoped list; accepts a `status` filter and pagination.
+- `GET /api/v1/expenses/{id}` and `GET /api/v1/payments/{id}`: Single resource; 404 `not_found` for non-parties.
 - `POST /api/v1/expenses/{id}/confirm`: Caller must not be `created_by_user_id` (403 `cannot_self_confirm`). Error: 409 `expense_not_pending`.
 - `POST /api/v1/expenses/{id}/discard`: Either party. Sets discarded.
 - `POST /api/v1/expenses/{id}/reverse`: Original must be confirmed (409 `original_not_confirmed`), not a reversal, not already reversed (409 `already_reversed`). Creates new pending mirroring the original with `reverses_expense_id` set -> 201.
+- Payments mirror expenses exactly (`from_user_id`/`to_user_id` instead of shares); same confirm/discard/reverse verbs and error codes.
+
+### 4.5 Comments, Pending, and Admin Endpoints
+- **Comments** (free-text discussion on a ledger entry, distinct from the immutable `description`):
+  - `GET /api/v1/expenses/{id}/comments`, `POST /api/v1/expenses/{id}/comments` — and the `payments` equivalents. Either party may comment on an entry they can see.
+- **Pending** (dashboard "needs your confirmation" view):
+  - `GET /api/v1/pending`: Expenses and payments across all of the caller's relationships that await *their* confirmation (i.e. created by the counterparty), newest first. Shape: `{"expenses": [...], "payments": [...]}` — two lists the client merges for display.
+- **Admin** (all require `user.is_admin`; non-admins get 403/404):
+  - `GET /api/v1/admin/stats`: Row counts (users, relationships, expenses, payments, comments, active tokens, audit entries).
+  - `POST /api/v1/admin/cleanup-tokens`: Purges expired/revoked auth tokens.
+  - `POST /api/v1/admin/reset-ledger`: Requires a confirmation phrase in the body; erases all ledger rows (expenses, payments, comments) while preserving accounts and relationships.
 
 ---
 
@@ -139,12 +170,12 @@ BEFORE UPDATE/DELETE triggers enforce invariants directly in the database:
 
 ### 5.1 Persistence & Security
 - `android:allowBackup="false"` (Tink keyset is device-local). Cleartext traffic permitted for self-hosted LAN IPs.
-- **ServerUrlStore:** DataStore `parity_config`. Key `server_url`.
+- **Server URL:** a compile-time `BASE_URL` build-config field in `app/build.gradle.kts` (no in-app connect screen or persisted URL store). Point it at your instance and rebuild.
 - **SecureTokenStore:** DataStore `parity_secure`. Key: Base64 Tink-encrypted token. First access auto-generates Android Keystore master key. Decryption failure yields null.
 - **TinkAeadProvider:** Interface that abstracts Keystore lookup for purely JVM unit testing (`SecureTokenStoreTest` uses a pure JVM fake).
 
 ### 5.2 Networking & DI
-- **ServiceLocator:** Initialized in Application. Holds Retrofit instance, rebuilds it when server URL changes. Accessible in Compose via `LocalServiceLocator.current`. ViewModels constructed via `viewModelFactory { ... }`.
+- **ServiceLocator:** Initialized in Application. Holds the Retrofit instance and the app's repository singletons. Accessible in Compose via `LocalServiceLocator.current`. ViewModels constructed via `viewModelFactory { ... }`.
 - **AuthInterceptor:** Synchronously reads token on worker thread. Appends `Authorization: Bearer <token>` if present and no header exists.
 - **TokenAuthenticator:** OkHttp Authenticator for 401s. Synchronizes on a class-level lock to prevent concurrent refreshes. 
   1. Checks if another thread refreshed token. If so, retries.
@@ -153,12 +184,21 @@ BEFORE UPDATE/DELETE triggers enforce invariants directly in the database:
 - **ApiResult:** Sealed interface: `Success(data)`, `HttpFailure(code, ApiError?)`, `NetworkFailure(IOException)`, `UnexpectedFailure(Throwable)`. Repositories map Retrofit responses and *never* throw exceptions.
 
 ### 5.3 Screens & Navigation (MVVM)
-- **StartupGate:** Combines Datastores. Emits `StartupDestination` enum: `Connect` (no URL) -> `Login` (no token) -> `Home` (has URL+token).
-- **Navigation:** Type-safe Compose Nav (`Route` interface). Observing `SessionExpired` clears back stack, routes to `Login`, shows one-shot banner.
-- **ConnectToServerScreen:** Validates URL parsing/schema, hits health endpoint, stores URL.
-- **LoginScreen:** Calls `/login`. Handles expired-session banner. Submit -> Home. Back button from here exits app.
-- **RegisterScreen:** Submit -> returns to Login with username prefilled.
-- **HomeScreen:** Calls `/me` on load. Logout completes local storage clearing even if network call fails, ensuring offline user is never trapped in the app.
+- **Startup:** the token store decides the start destination — a valid stored token lands on `Home`, otherwise `Login`. The server URL is compiled in (§5.1), so there is no connect step.
+- **Navigation:** Type-safe Compose Nav (`Route` sealed interface: `Login`, `Register`, `Home`, `CreateRelationship`, `RelationshipDetail`, `CreateExpense`, `CreatePayment`). Observing `SessionExpired` clears the back stack, routes to `Login`, and shows a one-shot banner.
+- **MainScreen:** the signed-in shell — a Material 3 `NavigationBar` with three tabs (Home, Relationships, Settings) hosting the dashboard, the people list, and settings.
+- **LoginScreen / RegisterScreen:** `/login` and `/register`. Login handles the expired-session banner; register returns to Login with the username prefilled.
+- **HomeScreen (dashboard):** per-currency net position, a "needs you" pending section fed by `GET /pending`, invite nudges, and a preview of the most active relationships. Pull-to-refresh.
+- **RelationshipListScreen ("People") / RelationshipDetailScreen:** the list with per-relationship balances and currency chips; the detail screen shows the balance, a dated ledger (confirmed + projected), and confirm/discard/reverse actions guarded by confirm dialogs.
+- **CreateExpenseScreen / CreatePaymentScreen:** integer-cents amount parsing and split math (shares always sum to the total); the live split preview updates as you type.
+- **SettingsScreen:** profile edit (`PATCH /me`), change password, logout (revokes server token, clears secure storage even on network failure so an offline user is never trapped), and an admin panel visible only to the admin account.
+
+### 5.4 Paper Design System
+The client is styled with an in-house design language called **Paper**, defined in `ui/theme/` and applied through `MaterialTheme` (opinionated palette; no Material You dynamic color):
+- **Palette:** ink on warm paper, one forest-green accent, an amber channel reserved for pending (needs-a-party) state, and red for you-owe/destructive. Full light and dark schemes; the money color encodes direction (green owed-to-you, red you-owe).
+- **Type:** Spectral (serif) for titles and money figures; Hanken Grotesk (grotesk sans) for all other UI. Both are bundled offline under `res/font/` (OFL) so rendering never depends on Google Play Services or a network fetch.
+- **Shape & layout:** pill-shaped controls; a flat, editorial layout — all-caps section labels, hairline dividers, no card elevation. Avatars are transparent-fill ink outlines. A Compose-drawn `ParityLogo` mark replaces any raster asset.
+- **Theme roles:** the Paper color schemes remap the full Material 3 role set — including the tonal `surfaceContainer*` ramp and the inverse (snackbar) roles — so nothing falls back to Material's baseline palette, with a transparent `surfaceTint` to keep surfaces flat.
 
 ---
 
@@ -176,9 +216,11 @@ BEFORE UPDATE/DELETE triggers enforce invariants directly in the database:
   - `TokenAuthenticatorTest`: Single 401 triggers refresh, concurrent 401s yield exactly one refresh, refresh failure cascade.
   - `SecureTokenStoreTest`: JVM unit test using fake Aead.
   - `ApiResultTest`: HTTP, Network, and Unexpected failure mappings.
+  - `RelationshipListViewModelTest` / `RelationshipDetailViewModelTest`: list/detail state machines, counterparty resolution, caller-perspective balance mapping.
+  - `MoneyFormatTest` / `AmountAndSplitTest`: integer-cents formatting and the integer-only split math (shares always sum to the total).
 
 ### 6.2 Roadmap
-- **Backend:** Multi-currency per pair (allow multiple accepted relationships between same pair by currency), password reset, audit logging, tags, attachments, recurring expenses.
+- **Backend:** Multi-currency per pair (allow multiple accepted relationships between same pair by currency), password reset, tags, attachments, recurring expenses.
 - **Android:** Offline support (read-only cache + queued writes), Push notifications.
 - **Out of Scope forever:** OAuth, JWTs, DB-level share sum enforcement, reversing a reversal.
 

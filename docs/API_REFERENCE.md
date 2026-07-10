@@ -1,11 +1,18 @@
 # API Reference
 
-Parity exposes a RESTful API over HTTPS. All endpoints (except auth/login/register) require a `Bearer` token. Timestamps are UTC ISO 8601. Currency amounts are always integers representing cents.
+Parity exposes a RESTful API over HTTPS. All endpoints (except health, auth/login, and auth/register) require a `Bearer` token. Timestamps are UTC ISO 8601 with a `Z` suffix. Currency amounts are always integers representing cents. All endpoints are versioned under `/api/v1`.
+
+## Health
+- `GET /api/v1/health`: Liveness check (no auth).
 
 ## Authentication
 - `POST /api/v1/auth/register`: Register a new user.
 - `POST /api/v1/auth/login`: Authenticate and receive a token.
 - `POST /api/v1/auth/logout`: Revoke current token.
+- `GET /api/v1/auth/me`: Get the signed-in user.
+- `PATCH /api/v1/auth/me`: Update the signed-in user's `display_name`.
+- `POST /api/v1/auth/change-password`: Change password; revokes all other sessions.
+- `POST /api/v1/auth/refresh`: Exchange the current token for a fresh one.
 
 ## Relationships
 - `GET /api/v1/relationships`: List all relationships.
@@ -15,20 +22,31 @@ Parity exposes a RESTful API over HTTPS. All endpoints (except auth/login/regist
 - `GET /api/v1/relationships/<id>/balance`: Get confirmed and projected balances.
 
 ## Ledger (Expenses & Payments)
-- `GET /api/v1/expenses`: List expenses.
+- `GET /api/v1/expenses`: List expenses (accepts a `status` filter + pagination).
+- `GET /api/v1/expenses/<id>`: Fetch a single expense.
 - `POST /api/v1/expenses`: Create an expense (supports optional `category`).
-- `POST /api/v1/expenses/<id>/confirm`: Confirm a pending expense.
+- `POST /api/v1/expenses/<id>/confirm`: Confirm a pending expense (counterparty only).
 - `POST /api/v1/expenses/<id>/discard`: Discard a pending expense.
 - `POST /api/v1/expenses/<id>/reverse`: Reverse a confirmed expense.
 
-- `GET /api/v1/payments`: List payments.
+- `GET /api/v1/payments`: List payments (accepts a `status` filter + pagination).
+- `GET /api/v1/payments/<id>`: Fetch a single payment.
 - `POST /api/v1/payments`: Create a payment.
-- `POST /api/v1/payments/<id>/confirm`: Confirm a pending payment.
+- `POST /api/v1/payments/<id>/confirm`: Confirm a pending payment (counterparty only).
 - `POST /api/v1/payments/<id>/discard`: Discard a pending payment.
 - `POST /api/v1/payments/<id>/reverse`: Reverse a confirmed payment.
+
+## Pending
+- `GET /api/v1/pending`: Expenses and payments across all relationships awaiting the caller's confirmation, for the dashboard "needs you" view. Returns `{"expenses": [...], "payments": [...]}`.
 
 ## Comments
 - `GET /api/v1/expenses/<id>/comments`: List comments on an expense.
 - `POST /api/v1/expenses/<id>/comments`: Post a comment on an expense.
 - `GET /api/v1/payments/<id>/comments`: List comments on a payment.
 - `POST /api/v1/payments/<id>/comments`: Post a comment on a payment.
+
+## Admin
+Operator-only; all require the signed-in user to be an admin.
+- `GET /api/v1/admin/stats`: Row counts across the database.
+- `POST /api/v1/admin/cleanup-tokens`: Purge expired/revoked auth tokens.
+- `POST /api/v1/admin/reset-ledger`: Erase all ledger entries (requires a confirmation phrase); accounts and relationships are preserved.
