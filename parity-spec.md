@@ -2,6 +2,8 @@
 
 This document is a self-contained specification for the Parity application as designed and implemented through Phase 6. A capable model with this document should be able to reproduce the entire application with the same architectural decisions, conventions, and behaviors.
 
+> **Status note (current as of the Paper overhaul).** This spec is a point-in-time snapshot through **Phase 6** and has not been rewritten since. The backend contract in §3–§4 remains accurate, but the Android client has since gained the Phase 7 ledger UI, the Phase 8 dashboard/settings overhaul, an admin panel, and — most visibly — the **"Paper" design system** (ink-on-warm-paper palette with a single forest-green accent and an amber pending channel; Spectral serif for titles/money and Hanken Grotesk for UI, bundled offline; pill controls and a flat editorial layout; light/dark). For the current Android state see [`README.md`](README.md), [`android/README.md`](android/README.md), and the Phase status in [`CLAUDE.md`](CLAUDE.md). A full refresh of §5 (Android Client) to cover Phases 7–8 and Paper is tracked as follow-up work.
+
 ---
 
 ## 1. Project Identity and Naming
