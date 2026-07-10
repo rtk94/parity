@@ -75,6 +75,10 @@ class HomeViewModel(
     private val _state = MutableStateFlow<HomeState>(HomeState.Loading)
     val state: StateFlow<HomeState> = _state.asStateFlow()
 
+    /** True while a user-initiated pull-to-refresh is in flight. */
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private var loadInFlight = false
 
     init { reload() }
@@ -84,6 +88,12 @@ class HomeViewModel(
 
     /** Silent revalidation that keeps current content on screen. */
     fun refresh() = load(showLoading = _state.value !is HomeState.Loaded)
+
+    /** Pull-to-refresh: revalidate while showing the pull indicator. */
+    fun pullRefresh() {
+        _isRefreshing.value = true
+        load(showLoading = false)
+    }
 
     /** Confirm a pending entry, then refresh. Optimistic-free: we reload. */
     fun confirm(item: PendingItem) = act(item) {
@@ -133,6 +143,7 @@ class HomeViewModel(
                 }
             } finally {
                 loadInFlight = false
+                _isRefreshing.value = false
             }
         }
     }
