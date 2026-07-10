@@ -1,0 +1,5 @@
+# Fronts the Parity backend with automatic HTTPS (Let's Encrypt).
+# PARITY_DOMAIN must resolve to this host and 80/443 must be reachable.
+{$PARITY_DOMAIN} {
+	reverse_proxy app:8000
+}

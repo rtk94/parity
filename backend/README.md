@@ -63,7 +63,31 @@ migration that adds the required `currency_code` column to
 flask run
 ```
 
-The API is then available at `http://localhost:5000`.
+The API is then available at `http://localhost:5000`. This is the
+Flask development server — for a real deployment, use Docker (below).
+
+## Deploy with Docker
+
+The repo root ships a production image (`backend/Dockerfile`) and a
+compose stack (`compose.yaml`). The image runs the app under **gunicorn**
+as a non-root user, applies migrations on startup, and stores the SQLite
+database in a named volume (`/data/parity.db`).
+
+```bash
+cp .env.example .env      # then set SECRET_KEY (see the file)
+docker compose up -d app  # build + run the API on 127.0.0.1:8000
+```
+
+Front it with the bundled Caddy reverse proxy (automatic HTTPS) by
+setting `PARITY_DOMAIN` in `.env` and enabling the `edge` profile:
+
+```bash
+docker compose --profile edge up -d
+```
+
+Override the host port with `APP_PORT` and worker count with
+`WEB_CONCURRENCY`. Note SQLite is the scale ceiling — a busy deployment
+with many writers should move to Postgres via `DATABASE_URL`.
 
 ## Run tests
 

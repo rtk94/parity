@@ -1,0 +1,44 @@
+name: parity
+
+services:
+  app:
+    build:
+      context: ./backend
+    image: parity-backend:latest
+    restart: unless-stopped
+    # SECRET_KEY (required) and any overrides live in .env — see .env.example.
+    env_file: .env
+    environment:
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+    volumes:
+      # SQLite database persists here (image default: /data/parity.db).
+      - parity-data:/data
+    # Bound to localhost only; the caddy service (or any reverse proxy)
+    # fronts it in production. Handy for local smoke tests. Override the
+    # host port with APP_PORT to avoid conflicts.
+    ports:
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
+
+  # Reverse proxy with automatic HTTPS. Opt-in: `docker compose --profile edge up`.
+  # Needs a real domain in PARITY_DOMAIN and ports 80/443 reachable.
+  caddy:
+    image: caddy:2
+    profiles: ["edge"]
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # Required when using the edge profile; Caddy needs a real domain.
+      PARITY_DOMAIN: ${PARITY_DOMAIN:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  parity-data:
+  caddy-data:
+  caddy-config:
