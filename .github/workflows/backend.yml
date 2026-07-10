@@ -4,9 +4,10 @@ on:
   push:
     branches: ["main"]
     paths: ["backend/**", ".github/workflows/backend.yml"]
+  # Runs on every PR to main (no path filter) so it can serve as a
+  # required status check without deadlocking non-backend PRs.
   pull_request:
     branches: ["main"]
-    paths: ["backend/**", ".github/workflows/backend.yml"]
   workflow_dispatch:
 
 jobs:
