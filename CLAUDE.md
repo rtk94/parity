@@ -6,7 +6,9 @@ Project-level guidance for Claude Code working in this repository.
 
 Parity is a self-hosted two-party expense and payment tracking ledger.
 The backend is Flask + SQLAlchemy 2.0 + SQLite. The Android client
-under `android/` is a Phase 5+ placeholder.
+under `android/` is a full Kotlin + Jetpack Compose app (auth, the
+ledger UI, and the "Paper" design-system overhaul; see the Phase
+status below).
 
 Design notes, the full endpoint surface, and the example curl flow
 live in `README.md` and `backend/README.md`. Read those before
@@ -48,6 +50,22 @@ in DB) that should not be casually broken.
   migration repairing the two relationship immutability triggers
   silently dropped by the Phase 5 table recreate (plus a regression
   test that runs the real migration chain).
+- Post-Phase 8, "Paper" design system: a full Android restyle
+  replacing the Phase 8 Material 3 teal theme. Ink-on-warm-paper
+  palette with a single forest-green accent, an amber channel reserved
+  for pending (needs-a-party) state, and red for you-owe/destructive;
+  Spectral serif for titles + money figures, Hanken Grotesk for UI
+  (both bundled offline under `res/font/`, no Google Play Services
+  fetch); pill-shaped controls and a flat, editorial layout (all-caps
+  section labels, hairline dividers, no card elevation). Every screen
+  was rebuilt in Paper (home, relationship ledger/detail, add-expense,
+  log-payment, people list + pull-to-refresh, login/register,
+  settings), plus a Compose-drawn `ParityLogo` mark and
+  transparent-fill ink-outline initials avatars. Follow-up fixes:
+  mapped the remaining Material 3 tonal-container roles to Paper tones
+  (the FAB, currency chips, nav bar, and snackbars were falling back
+  to baseline lavender) and stopped the Settings profile placeholder
+  flashing before load.
 - Phase 9+ (planned): remaining roadmap items (offline, push, etc.).
 
 Update this section as phases land.

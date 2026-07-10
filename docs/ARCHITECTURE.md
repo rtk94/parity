@@ -22,7 +22,7 @@ The backend is a Flask application designed with clean service layers, an immuta
 
 The Android application is built entirely with Jetpack Compose using modern Android development practices.
 
-- **UI:** Jetpack Compose (Material 3).
+- **UI:** Jetpack Compose (Material 3), styled with the in-house "Paper" design system — an ink-on-warm-paper palette with a single forest-green accent and an amber pending channel, Spectral serif for titles/money and Hanken Grotesk for UI (bundled offline), pill controls, and a flat editorial layout with light/dark support.
 - **Architecture Pattern:** MVVM (Model-View-ViewModel) with Unidirectional Data Flow using `StateFlow`.
 - **Navigation:** Compose Navigation with a central `ParityNavHost`.
 - **Networking:** Retrofit 2 + OkHttp + kotlinx.serialization.
