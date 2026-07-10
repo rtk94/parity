@@ -24,6 +24,9 @@ dev = [
     "pytest>=8.0",
     "ruff>=0.5",
 ]
+prod = [
+    "gunicorn>=22.0",
+]
 
 [tool.setuptools.packages.find]
 include = ["app*"]
