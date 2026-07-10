@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -13,11 +14,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -37,6 +38,9 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rknepp.parity.app.LocalServiceLocator
 import com.rknepp.parity.relationships.ui.formatCents
 import com.rknepp.parity.ui.components.LoadingState
+import com.rknepp.parity.ui.theme.ParityMoney
+import com.rknepp.parity.ui.theme.ParityThemeDefaults
+import com.rknepp.parity.ui.theme.PillShape
 import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -76,7 +80,7 @@ fun CreateExpenseScreen(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(padding)
-                        .padding(16.dp),
+                        .padding(24.dp),
                 ) {
                     Text(
                         text = state.error!!,
@@ -103,16 +107,18 @@ private fun CreateExpenseForm(
         modifier = Modifier
             .fillMaxSize()
             .padding(padding)
-            .padding(16.dp)
+            .padding(horizontal = 24.dp)
             .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         OutlinedTextField(
             value = state.amountInput,
             onValueChange = vm::updateAmount,
             label = { Text("Total amount") },
             suffix = { Text(state.currencyCode) },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 16.dp),
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             enabled = !state.isSubmitting,
@@ -138,6 +144,8 @@ private fun CreateExpenseForm(
 
         SplitSection(state = state, vm = vm)
 
+        OutcomePreview(state = state)
+
         if (state.error != null) {
             Text(
                 text = state.error!!,
@@ -148,7 +156,11 @@ private fun CreateExpenseForm(
 
         Button(
             onClick = vm::submit,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(52.dp),
+            shape = PillShape,
+            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
             enabled = !state.isSubmitting &&
                 state.totalCents > 0 &&
                 state.description.isNotBlank(),
@@ -159,7 +171,7 @@ private fun CreateExpenseForm(
                     color = MaterialTheme.colorScheme.onPrimary,
                 )
             } else {
-                Text("Save expense")
+                Text("Add expense", style = MaterialTheme.typography.labelLarge)
             }
         }
     }
@@ -167,62 +179,93 @@ private fun CreateExpenseForm(
 
 @Composable
 private fun SplitSection(state: CreateExpenseState, vm: CreateExpenseViewModel) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text("Split", style = MaterialTheme.typography.titleMedium)
+    Column {
+        Text(
+            "SPLIT",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            "You paid the full amount. Choose how much of it " +
+                "${state.counterpartyName} owes you.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FilterChip(
+                selected = state.counterpartySharePercent == 0,
+                onClick = { vm.updateCounterpartySharePercent(0) },
+                label = { Text("Your treat") },
+                enabled = !state.isSubmitting,
+            )
+            FilterChip(
+                selected = state.counterpartySharePercent == 50,
+                onClick = { vm.updateCounterpartySharePercent(50) },
+                label = { Text("Split evenly") },
+                enabled = !state.isSubmitting,
+            )
+            FilterChip(
+                selected = state.counterpartySharePercent == 100,
+                onClick = { vm.updateCounterpartySharePercent(100) },
+                label = { Text("They owe all") },
+                enabled = !state.isSubmitting,
+            )
+        }
+
+        Slider(
+            value = state.counterpartySharePercent.toFloat(),
+            onValueChange = { vm.updateCounterpartySharePercent(it.roundToInt()) },
+            valueRange = 0f..100f,
+            enabled = !state.isSubmitting,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp),
+        )
+    }
+}
+
+/**
+ * Persistent outcome line, recomputed on every amount/split change:
+ * the single sentence answering "what does this do to our balance?"
+ */
+@Composable
+private fun OutcomePreview(state: CreateExpenseState) {
+    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+    Column(modifier = Modifier.padding(top = 16.dp)) {
+        if (state.totalCents <= 0L) {
             Text(
-                "You paid the full amount. Choose how much of it " +
-                    "${state.counterpartyName} owes you.",
-                style = MaterialTheme.typography.bodySmall,
+                "Enter an amount to see the split.",
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else if (state.counterpartyShareCents <= 0L) {
+            Text(
+                "Your treat — ${state.counterpartyName} owes nothing.",
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        } else {
+            Text(
+                "${state.counterpartyName} will owe you",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                formatCents(state.counterpartyShareCents, state.currencyCode),
+                style = ParityMoney.screen,
+                color = ParityThemeDefaults.colors.positive,
                 modifier = Modifier.padding(top = 2.dp),
             )
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                FilterChip(
-                    selected = state.counterpartySharePercent == 0,
-                    onClick = { vm.updateCounterpartySharePercent(0) },
-                    label = { Text("Your treat") },
-                    enabled = !state.isSubmitting,
-                )
-                FilterChip(
-                    selected = state.counterpartySharePercent == 50,
-                    onClick = { vm.updateCounterpartySharePercent(50) },
-                    label = { Text("Split evenly") },
-                    enabled = !state.isSubmitting,
-                )
-                FilterChip(
-                    selected = state.counterpartySharePercent == 100,
-                    onClick = { vm.updateCounterpartySharePercent(100) },
-                    label = { Text("They owe all") },
-                    enabled = !state.isSubmitting,
-                )
-            }
-
-            Slider(
-                value = state.counterpartySharePercent.toFloat(),
-                onValueChange = { vm.updateCounterpartySharePercent(it.roundToInt()) },
-                valueRange = 0f..100f,
-                enabled = !state.isSubmitting,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-            )
-
-            val shareText = formatCents(state.counterpartyShareCents, state.currencyCode)
-            val yourText = formatCents(state.payerShareCents, state.currencyCode)
             Text(
-                text = "${state.counterpartyName} owes you $shareText " +
-                    "(${state.counterpartySharePercent}%) · your share $yourText",
+                "your share ${formatCents(state.payerShareCents, state.currencyCode)}",
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
