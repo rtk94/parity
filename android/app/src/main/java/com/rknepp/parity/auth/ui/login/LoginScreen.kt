@@ -11,8 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -37,6 +36,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rknepp.parity.R
 import com.rknepp.parity.app.LocalServiceLocator
+import com.rknepp.parity.ui.components.ParityLogo
+import com.rknepp.parity.ui.theme.PillShape
 
 @Composable
 fun LoginScreen(
@@ -74,11 +75,13 @@ fun LoginScreen(
                     .fillMaxWidth()
                     .padding(top = 56.dp, bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                ParityLogo(size = 56)
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = stringResource(R.string.login_tagline),
@@ -88,18 +91,14 @@ fun LoginScreen(
             }
 
             if (bannerVisible) {
-                Card(
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.errorContainer,
-                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-                    ),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(
-                        text = stringResource(R.string.login_session_expired_banner),
-                        modifier = Modifier.padding(16.dp),
-                    )
-                }
+                Text(
+                    text = stringResource(R.string.login_session_expired_banner),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                )
             }
 
             OutlinedTextField(
@@ -156,15 +155,22 @@ fun LoginScreen(
                 onClick = { vm.submit(onLoggedIn) },
                 enabled = !state.submitting &&
                     state.username.isNotBlank() && state.password.isNotEmpty(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = PillShape,
+                elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
             ) {
                 if (state.submitting) {
                     CircularProgressIndicator(
-                        modifier = Modifier.height(20.dp),
-                        strokeWidth = 2.dp,
+                        modifier = Modifier.padding(2.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
-                    Text(stringResource(R.string.login_button))
+                    Text(
+                        stringResource(R.string.login_button),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
             }
 
