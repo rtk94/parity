@@ -52,3 +52,8 @@ flat editorial layout — with full light/dark support.
 
 Deferred items across all phases are tracked in
 [`ROADMAP.md`](ROADMAP.md).
+
+## License
+
+Licensed under the [Apache License, Version 2.0](LICENSE). See
+[`NOTICE`](NOTICE) for attribution.
