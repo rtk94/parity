@@ -76,10 +76,10 @@ fun CurrencyChip(code: String, modifier: Modifier = Modifier) {
     Text(
         text = code,
         style = MaterialTheme.typography.labelMedium,
-        color = MaterialTheme.colorScheme.onPrimaryContainer,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = modifier
             .clip(RoundedCornerShape(8.dp))
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+            .background(MaterialTheme.colorScheme.surfaceVariant)
             .padding(horizontal = 8.dp, vertical = 3.dp),
     )
 }
