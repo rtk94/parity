@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -34,6 +35,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rknepp.parity.R
 import com.rknepp.parity.app.LocalServiceLocator
+import com.rknepp.parity.ui.components.ParityLogo
+import com.rknepp.parity.ui.theme.PillShape
 
 @Composable
 fun RegisterScreen(
@@ -60,11 +63,13 @@ fun RegisterScreen(
                     .fillMaxWidth()
                     .padding(top = 56.dp, bottom = 8.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                ParityLogo(size = 56)
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.headlineLarge,
-                    color = MaterialTheme.colorScheme.primary,
+                    color = MaterialTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = stringResource(R.string.register_title),
@@ -143,15 +148,22 @@ fun RegisterScreen(
                     state.username.isNotBlank() &&
                     state.password.isNotEmpty() &&
                     state.displayName.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp),
+                shape = PillShape,
+                elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
             ) {
                 if (state.submitting) {
                     CircularProgressIndicator(
-                        modifier = Modifier.height(20.dp),
-                        strokeWidth = 2.dp,
+                        modifier = Modifier.padding(2.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
                     )
                 } else {
-                    Text(stringResource(R.string.register_button))
+                    Text(
+                        stringResource(R.string.register_button),
+                        style = MaterialTheme.typography.labelLarge,
+                    )
                 }
             }
 
