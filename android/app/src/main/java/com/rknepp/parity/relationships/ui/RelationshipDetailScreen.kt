@@ -1,38 +1,32 @@
 package com.rknepp.parity.relationships.ui
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,8 +38,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -53,8 +47,9 @@ import com.rknepp.parity.app.LocalServiceLocator
 import com.rknepp.parity.ui.components.ConfirmActionDialog
 import com.rknepp.parity.ui.components.ErrorState
 import com.rknepp.parity.ui.components.LoadingState
-import com.rknepp.parity.ui.components.StatusChip
+import com.rknepp.parity.ui.theme.ParityMoney
 import com.rknepp.parity.ui.theme.ParityThemeDefaults
+import com.rknepp.parity.ui.theme.PillShape
 
 /** Destructive/consequential actions gated behind a confirm dialog. */
 private sealed interface PendingAction {
@@ -220,96 +215,74 @@ private fun RelationshipDetailContent(
     onCommentDraftChange: (LedgerRow, String) -> Unit,
     onPostComment: (LedgerRow) -> Unit,
 ) {
+    val pending = data.ledgerItems.filter { it.status == "pending" }
+    val history = data.ledgerItems.filter { it.status != "pending" }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
         if (data.canAccept || data.canReject) {
-            item {
-                InviteBanner(
-                    data = data,
-                    onAccept = onAccept,
-                    onReject = onReject,
-                    modifier = Modifier.padding(top = 12.dp),
-                )
-            }
+            item { InviteBanner(data, onAccept, onReject, Modifier.padding(top = 12.dp)) }
         }
 
         item {
-            BalanceCard(
+            BalanceBand(
                 data = data,
                 modifier = Modifier.padding(top = if (data.canAccept || data.canReject) 0.dp else 12.dp),
             )
         }
 
         if (data.status == "accepted") {
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    FilledTonalButton(
-                        onClick = onAddExpense,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            Icons.Default.ShoppingCart,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text("Add expense", modifier = Modifier.padding(start = 8.dp))
-                    }
-                    FilledTonalButton(
-                        onClick = onAddPayment,
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.Send,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                        )
-                        Text("Log payment", modifier = Modifier.padding(start = 8.dp))
-                    }
-                }
-            }
-        }
-
-        item {
-            Text(
-                "Activity",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
+            item { ActionBar(onAddExpense = onAddExpense, onAddPayment = onAddPayment) }
         }
 
         if (data.ledgerItems.isEmpty()) {
             item {
                 Text(
-                    text = "No entries yet. Expenses and payments you add will show up here.",
+                    "No entries yet. Expenses and payments you add will show up here.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 8.dp),
                 )
             }
         }
 
-        items(data.ledgerItems, key = { "${it.type}_${it.id}" }) { item ->
-            LedgerItemCard(
-                item = item,
-                onConfirm = { onConfirm(item) },
-                onDiscard = { onDiscard(item) },
-                onReverse = { onReverse(item) },
-                onToggleComments = { onToggleComments(item) },
-                onCommentDraftChange = { draft -> onCommentDraftChange(item, draft) },
-                onPostComment = { onPostComment(item) },
-            )
+        if (pending.isNotEmpty()) {
+            item {
+                LedgerGroup(
+                    header = if (pending.size == 1) "1 pending · needs you"
+                    else "${pending.size} pending · needs you",
+                    headerColor = ParityThemeDefaults.colors.pending,
+                    rows = pending,
+                    onConfirm = onConfirm,
+                    onDiscard = onDiscard,
+                    onReverse = onReverse,
+                    onToggleComments = onToggleComments,
+                    onCommentDraftChange = onCommentDraftChange,
+                    onPostComment = onPostComment,
+                )
+            }
         }
 
-        item {
-            Box(modifier = Modifier.padding(16.dp))
+        if (history.isNotEmpty()) {
+            item {
+                LedgerGroup(
+                    header = "History",
+                    headerColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    rows = history,
+                    onConfirm = onConfirm,
+                    onDiscard = onDiscard,
+                    onReverse = onReverse,
+                    onToggleComments = onToggleComments,
+                    onCommentDraftChange = onCommentDraftChange,
+                    onPostComment = onPostComment,
+                )
+            }
         }
+
+        item { Box(modifier = Modifier.padding(8.dp)) }
     }
 }
 
@@ -320,110 +293,132 @@ private fun InviteBanner(
     onReject: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        ),
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = if (data.canAccept) {
-                    "${data.counterpartyName} invited you to share a ${data.currencyCode} ledger."
-                } else {
-                    "Waiting for ${data.counterpartyName} to accept your ${data.currencyCode} invite."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.End,
-            ) {
-                if (data.canReject) {
-                    OutlinedButton(onClick = onReject, modifier = Modifier.padding(end = 8.dp)) {
-                        Text(if (data.canAccept) "Decline" else "Cancel invite")
-                    }
-                }
-                if (data.canAccept) {
-                    Button(onClick = onAccept) {
-                        Text("Accept")
-                    }
-                }
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LabelCaps(
+            if (data.canAccept) "invitation" else "awaiting acceptance",
+            ParityThemeDefaults.colors.pending,
+        )
+        Text(
+            text = if (data.canAccept) {
+                "${data.counterpartyName} invited you to share a ${data.currencyCode} ledger."
+            } else {
+                "Waiting for ${data.counterpartyName} to accept your ${data.currencyCode} invite."
+            },
+            style = MaterialTheme.typography.bodyLarge,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+            if (data.canAccept) {
+                TextAction("Accept", MaterialTheme.colorScheme.tertiary, bold = true, onClick = onAccept)
+            }
+            if (data.canReject) {
+                TextAction(
+                    if (data.canAccept) "Decline" else "Cancel invite",
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    onClick = onReject,
+                )
             }
         }
+        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
     }
 }
 
 @Composable
-private fun BalanceCard(data: RelationshipDetailData, modifier: Modifier = Modifier) {
+private fun BalanceBand(data: RelationshipDetailData, modifier: Modifier = Modifier) {
     val confirmed = data.confirmed
-    val projected = data.projected
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(modifier = Modifier.padding(20.dp)) {
-            Text(
-                "Confirmed balance",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    Column(modifier = modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        LabelCaps("Balance", MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            confirmed.amountText,
+            style = ParityMoney.screen,
+            color = when {
+                confirmed.settled -> MaterialTheme.colorScheme.onSurface
+                confirmed.youOwe -> MaterialTheme.colorScheme.error
+                else -> ParityThemeDefaults.colors.positive
+            },
+        )
+        Text(
             when {
-                confirmed.settled -> Text(
-                    "All settled up",
-                    style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-                confirmed.youOwe -> {
-                    Text(
-                        confirmed.amountText,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    Text(
-                        "you owe ${confirmed.counterpartyName}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                else -> {
-                    Text(
-                        confirmed.amountText,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = ParityThemeDefaults.colors.positive,
-                        modifier = Modifier.padding(top = 4.dp),
-                    )
-                    Text(
-                        "${confirmed.counterpartyName} owes you",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
+                confirmed.settled -> "all settled up"
+                confirmed.youOwe -> "you owe ${confirmed.counterpartyName}"
+                else -> "${confirmed.counterpartyName} owes you"
+            },
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        if (data.projected != confirmed) {
+            val projected = data.projected
+            val projectedText = when {
+                projected.settled -> "settled up"
+                projected.youOwe -> "you owe ${projected.amountText}"
+                else -> "${projected.counterpartyName} owes you ${projected.amountText}"
             }
+            Text(
+                "once pending confirms: $projectedText",
+                style = MaterialTheme.typography.bodyMedium,
+                color = ParityThemeDefaults.colors.pending,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.padding(top = 12.dp),
+        )
+    }
+}
 
-            if (projected != confirmed) {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                val projectedText = when {
-                    projected.settled -> "settled up"
-                    projected.youOwe -> "you owe ${projected.amountText}"
-                    else -> "${projected.counterpartyName} owes you ${projected.amountText}"
-                }
-                Text(
-                    "Once pending entries confirm: $projectedText",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.secondary,
-                )
+@Composable
+private fun ActionBar(onAddExpense: () -> Unit, onAddPayment: () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Button(
+            onClick = onAddExpense,
+            shape = PillShape,
+            elevation = ButtonDefaults.buttonElevation(0.dp, 0.dp, 0.dp, 0.dp, 0.dp),
+        ) {
+            Text("Add expense", style = MaterialTheme.typography.labelLarge)
+        }
+        TextAction(
+            "Pay",
+            MaterialTheme.colorScheme.tertiary,
+            bold = true,
+            onClick = onAddPayment,
+            modifier = Modifier.padding(start = 20.dp),
+        )
+    }
+}
+
+@Composable
+private fun LedgerGroup(
+    header: String,
+    headerColor: Color,
+    rows: List<LedgerRow>,
+    onConfirm: (LedgerRow) -> Unit,
+    onDiscard: (LedgerRow) -> Unit,
+    onReverse: (LedgerRow) -> Unit,
+    onToggleComments: (LedgerRow) -> Unit,
+    onCommentDraftChange: (LedgerRow, String) -> Unit,
+    onPostComment: (LedgerRow) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        LabelCaps(header, headerColor)
+        rows.forEachIndexed { index, item ->
+            if (index > 0) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
             }
+            LedgerEntry(
+                item = item,
+                onConfirm = { onConfirm(item) },
+                onDiscard = { onDiscard(item) },
+                onReverse = { onReverse(item) },
+                onToggleComments = { onToggleComments(item) },
+                onCommentDraftChange = { draft -> onCommentDraftChange(item, draft) },
+                onPostComment = { onPostComment(item) },
+            )
         }
     }
 }
 
 @Composable
-private fun LedgerItemCard(
+private fun LedgerEntry(
     item: LedgerRow,
     onConfirm: () -> Unit,
     onDiscard: () -> Unit,
@@ -433,133 +428,112 @@ private fun LedgerItemCard(
     onPostComment: () -> Unit,
 ) {
     val inactive = item.status == "discarded"
-    Card(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
-            .alpha(if (inactive) 0.6f else 1f),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            .alpha(if (inactive) 0.55f else 1f)
+            .padding(vertical = 13.dp),
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                EntryIcon(type = item.type)
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(start = 12.dp),
-                ) {
-                    Text(item.description, style = MaterialTheme.typography.titleMedium)
+        Row(verticalAlignment = Alignment.Top) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(item.description, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    item.subtitle,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp),
+                )
+                Row(modifier = Modifier.padding(top = 2.dp)) {
                     Text(
-                        item.subtitle,
-                        style = MaterialTheme.typography.bodySmall,
+                        item.dateText,
+                        style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 4.dp),
-                    ) {
+                    item.category?.let {
                         Text(
-                            item.dateText,
+                            " · $it",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        if (item.category != null) {
-                            Text(
-                                " · ${item.category}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.secondary,
-                            )
-                        }
-                        if (item.isReversal) {
-                            Text(
-                                " · Reversal",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                            )
-                        }
+                    }
+                    if (inactive) {
+                        Text(
+                            " · discarded",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                 }
-                Column(horizontalAlignment = Alignment.End) {
-                    DeltaText(delta = item.deltaCents, amountText = item.amountText)
-                    StatusChip(item.status, modifier = Modifier.padding(top = 4.dp))
-                }
             }
+            DeltaText(delta = item.deltaCents, amountText = item.amountText)
+        }
 
-            val hasActions = item.canConfirm || item.canDiscard || item.canReverse
-            Row(
+        item.reversalItem?.let { ReversalLine(it) }
+
+        val actions = buildList {
+            if (item.canConfirm) add(Triple("Confirm", MaterialTheme.colorScheme.tertiary, onConfirm))
+            if (item.canDiscard) add(
+                Triple("Decline", MaterialTheme.colorScheme.onSurfaceVariant, onDiscard),
+            )
+            if (item.canReverse) add(
+                Triple("Reverse", MaterialTheme.colorScheme.onSurfaceVariant, onReverse),
+            )
+            add(
+                Triple(
+                    if (item.comments != null) "Hide comments" else "Comments",
+                    MaterialTheme.colorScheme.onSurfaceVariant,
+                    onToggleComments,
+                ),
+            )
+        }
+        Row(
+            modifier = Modifier.padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+        ) {
+            actions.forEach { (label, color, onClick) ->
+                TextAction(label, color, bold = label == "Confirm", onClick = onClick)
+            }
+        }
+
+        if (item.isLoadingComments) {
+            CircularProgressIndicator(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = if (hasActions) 8.dp else 0.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                TextButton(onClick = onToggleComments) {
-                    Text(if (item.comments != null) "Hide comments" else "Comments")
-                }
-                if (item.canReverse) {
-                    TextButton(onClick = onReverse) {
-                        Text("Reverse")
-                    }
-                }
-                if (item.canDiscard) {
-                    OutlinedButton(
-                        onClick = onDiscard,
-                        modifier = Modifier.padding(start = 8.dp),
-                    ) {
-                        Text("Discard")
-                    }
-                }
-                if (item.canConfirm) {
-                    Button(
-                        onClick = onConfirm,
-                        modifier = Modifier.padding(start = 8.dp),
-                    ) {
-                        Text("Confirm")
-                    }
-                }
-            }
-
-            if (item.isLoadingComments) {
-                CircularProgressIndicator(
-                    modifier = Modifier
-                        .padding(top = 8.dp)
-                        .size(24.dp)
-                        .align(Alignment.CenterHorizontally),
-                    strokeWidth = 2.dp,
-                )
-            } else if (item.comments != null) {
-                CommentsSection(
-                    item = item,
-                    onDraftChange = onCommentDraftChange,
-                    onPost = onPostComment,
-                )
-            }
+                    .padding(top = 8.dp)
+                    .size(20.dp),
+                strokeWidth = 2.dp,
+            )
+        } else if (item.comments != null) {
+            CommentsSection(item = item, onDraftChange = onCommentDraftChange, onPost = onPostComment)
         }
     }
 }
 
+/** A confirmed reversal, shown as an indented detail line under its original. */
 @Composable
-private fun EntryIcon(type: String) {
-    val icon = if (type == "expense") Icons.Default.ShoppingCart else Icons.AutoMirrored.Filled.Send
-    Box(
+private fun ReversalLine(reversal: LedgerRow) {
+    Row(
         modifier = Modifier
-            .size(38.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)),
-        contentAlignment = Alignment.Center,
+            .fillMaxWidth()
+            .padding(top = 6.dp, start = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = if (type == "expense") "Expense" else "Payment",
-            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.size(18.dp),
+        Text(
+            "Reversed · ${reversal.dateText}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            "−${reversal.amountText}",
+            style = ParityMoney.row,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }
 
 /**
  * Entry amount, colored by its effect on the caller: green when it
- * moves money toward you, error-red when it moves money away, muted
- * when the entry has no balance effect (discarded).
+ * moves money toward you, red when away, muted when no balance effect.
  */
 @Composable
 private fun DeltaText(delta: Long?, amountText: String) {
@@ -569,10 +543,31 @@ private fun DeltaText(delta: Long?, amountText: String) {
         delta < 0L -> MaterialTheme.colorScheme.error
         else -> MaterialTheme.colorScheme.onSurface
     }
+    Text(amountText, style = ParityMoney.row, color = color)
+}
+
+@Composable
+private fun LabelCaps(text: String, color: Color) {
+    Text(text.uppercase(), style = MaterialTheme.typography.labelSmall, color = color)
+}
+
+@Composable
+private fun TextAction(
+    label: String,
+    color: Color,
+    bold: Boolean = false,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     Text(
-        amountText,
-        style = MaterialTheme.typography.titleMedium,
+        label,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium,
         color = color,
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 14.dp),
     )
 }
 
@@ -587,11 +582,14 @@ private fun CommentsSection(
             .fillMaxWidth()
             .padding(top = 8.dp),
     ) {
-        HorizontalDivider(modifier = Modifier.padding(bottom = 8.dp))
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
         if (item.comments.isNullOrEmpty()) {
             Text(
                 "No comments yet.",
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(bottom = 8.dp),
             )
@@ -603,9 +601,9 @@ private fun CommentsSection(
                             comment.authorName,
                             style = MaterialTheme.typography.labelMedium,
                             color = if (comment.isMine) {
-                                MaterialTheme.colorScheme.primary
+                                ParityThemeDefaults.colors.positive
                             } else {
-                                MaterialTheme.colorScheme.secondary
+                                MaterialTheme.colorScheme.onSurface
                             },
                         )
                         Text(
@@ -638,15 +636,12 @@ private fun CommentsSection(
                 enabled = item.commentDraft.isNotBlank() && !item.isPostingComment,
             ) {
                 if (item.isPostingComment) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                    )
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 } else {
                     Icon(
                         Icons.AutoMirrored.Filled.Send,
                         contentDescription = "Post comment",
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = MaterialTheme.colorScheme.tertiary,
                     )
                 }
             }

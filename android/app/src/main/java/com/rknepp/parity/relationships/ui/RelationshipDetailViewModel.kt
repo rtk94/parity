@@ -62,6 +62,11 @@ data class LedgerRow(
     val canConfirm: Boolean,
     val canDiscard: Boolean,
     val canReverse: Boolean,
+    /**
+     * A confirmed reversal of this entry, nested here as a history detail
+     * line instead of floating as its own row. Null when not reversed.
+     */
+    val reversalItem: LedgerRow? = null,
     val comments: List<CommentRow>? = null,
     val isLoadingComments: Boolean = false,
     val commentDraft: String = "",
@@ -153,6 +158,9 @@ class RelationshipDetailViewModel(
 
                 val ledgerRows = mutableListOf<LedgerRow>()
                 for (e in expenses) {
+                    // A confirmed reversal is nested under its original below,
+                    // not floated as its own top-level row.
+                    if (e.reverses_expense_id != null && e.status == "confirmed") continue
                     val isPayer = e.payer_user_id == myId
                     val otherShare = e.shares
                         .firstOrNull { it.user_id != e.payer_user_id }
@@ -164,6 +172,9 @@ class RelationshipDetailViewModel(
                         "$otherName paid · you owe $shareText"
                     }
                     val hasEffect = e.status == "pending" || e.status == "confirmed"
+                    val reversal = expenses.firstOrNull {
+                        it.reverses_expense_id == e.id && it.status == "confirmed"
+                    }
                     ledgerRows.add(
                         LedgerRow(
                             id = e.id,
@@ -184,14 +195,38 @@ class RelationshipDetailViewModel(
                             isReversal = e.reverses_expense_id != null,
                             canConfirm = e.status == "pending" && e.created_by_user_id != myId,
                             canDiscard = e.status == "pending",
-                            canReverse = e.status == "confirmed" && e.reverses_expense_id == null,
+                            canReverse = e.status == "confirmed" &&
+                                e.reverses_expense_id == null && reversal == null,
+                            reversalItem = reversal?.let { rev ->
+                                LedgerRow(
+                                    id = rev.id,
+                                    type = "expense",
+                                    description = rev.description,
+                                    category = rev.category,
+                                    amountText = formatCents(rev.total_cents, rel.currencyCode),
+                                    status = rev.status,
+                                    timestamp = rev.created_at,
+                                    dateText = formatIsoDate(rev.created_at),
+                                    subtitle = "Reversal",
+                                    deltaCents = null,
+                                    isPayer = rev.payer_user_id == myId,
+                                    isReversal = true,
+                                    canConfirm = false,
+                                    canDiscard = false,
+                                    canReverse = false,
+                                )
+                            },
                         ),
                     )
                 }
                 for (p in payments) {
+                    if (p.reverses_payment_id != null && p.status == "confirmed") continue
                     val isSender = p.from_user_id == myId
                     val subtitle = if (isSender) "You paid $otherName" else "$otherName paid you"
                     val hasEffect = p.status == "pending" || p.status == "confirmed"
+                    val reversal = payments.firstOrNull {
+                        it.reverses_payment_id == p.id && it.status == "confirmed"
+                    }
                     ledgerRows.add(
                         LedgerRow(
                             id = p.id,
@@ -212,7 +247,27 @@ class RelationshipDetailViewModel(
                             isReversal = p.reverses_payment_id != null,
                             canConfirm = p.status == "pending" && p.created_by_user_id != myId,
                             canDiscard = p.status == "pending",
-                            canReverse = p.status == "confirmed" && p.reverses_payment_id == null,
+                            canReverse = p.status == "confirmed" &&
+                                p.reverses_payment_id == null && reversal == null,
+                            reversalItem = reversal?.let { rev ->
+                                LedgerRow(
+                                    id = rev.id,
+                                    type = "payment",
+                                    description = rev.description,
+                                    category = null,
+                                    amountText = formatCents(rev.amount_cents, rel.currencyCode),
+                                    status = rev.status,
+                                    timestamp = rev.created_at,
+                                    dateText = formatIsoDate(rev.created_at),
+                                    subtitle = "Reversal",
+                                    deltaCents = null,
+                                    isPayer = rev.from_user_id == myId,
+                                    isReversal = true,
+                                    canConfirm = false,
+                                    canDiscard = false,
+                                    canReverse = false,
+                                )
+                            },
                         ),
                     )
                 }
