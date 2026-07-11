@@ -1,6 +1,8 @@
 # Parity Project Context
 
-Parity is a self-hosted, two-party expense and payment tracking ledger designed around an **immutable ledger** and **explicit two-party confirmation**. Corrections are made via reversing entries rather than edits or deletions.
+Parity is a **centrally-hosted**, two-party expense and payment tracking service designed around an **immutable ledger** and **explicit two-party confirmation**. Corrections are made via reversing entries rather than edits or deletions. It is operated as one official hosted instance, aimed at becoming a real public product.
+
+> **Vision & values:** see [`docs/VISION.md`](docs/VISION.md) — the source of truth for the product's direction. "Self-hosted" is legacy framing from the early vision (self-hosting is now a possible future fork, not a mainline constraint).
 
 ## Project Overview
 

@@ -1,6 +1,6 @@
 # Parity Documentation
 
-Welcome to the official documentation for **Parity**, a self-hosted, two-party expense and payment tracking ledger designed around an immutable ledger and explicit two-party confirmation.
+Welcome to the official documentation for **Parity**, a centrally-hosted, two-party expense and payment tracking service designed around an immutable ledger and explicit two-party confirmation. See [Vision & Values](VISION.md) for the product's direction and the values that guide its decisions.
 
 ## Overview
 
@@ -15,9 +15,10 @@ Parity is designed for fair and transparent financial tracking between two parti
 
 ## Documentation Index
 
+- [Vision & Values](VISION.md): What Parity is, the values that guide its decisions, and how to apply them. **Authoritative** — read before decisions touching deployment, data, or dependencies.
 - [Getting Started](GETTING_STARTED.md): Setup instructions for the backend and Android client.
 - [Architecture](ARCHITECTURE.md): Detailed overview of the system architecture, data models, and Android app structure.
 - [API Reference](API_REFERENCE.md): Documentation of the RESTful API endpoints.
 - [Deployment](DEPLOYMENT.md): How prod and staging run on the VPS (native gunicorn + nginx + certbot), and how to deploy.
 - [Architecture Decision Records](adr/): Records of significant technical decisions and their trade-offs.
-  - [ADR-0001: Push notification transport](adr/0001-push-notification-transport.md) (Proposed)
+  - [ADR-0001: Push notification transport](adr/0001-push-notification-transport.md) (Accepted — FCM)
