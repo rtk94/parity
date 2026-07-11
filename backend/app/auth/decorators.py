@@ -52,7 +52,7 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
             return error_response(401, "unauthorized", "Invalid or revoked token.")
 
         user = db.session.get(User, token.user_id)
-        if user is None:
+        if user is None or user.is_deleted:
             return error_response(401, "unauthorized", "Token user no longer exists.")
 
         now = datetime.now(UTC)
