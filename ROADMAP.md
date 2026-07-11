@@ -54,10 +54,11 @@ connection" states. Deferred from Phase 6 planning.
 Delivered via FCM across backend (device registration + a best-effort
 sender) and the Android client; see
 [ADR-0001](docs/adr/0001-push-notification-transport.md) and the
-phase-status log in `CLAUDE.md`. The v1 catalogue covers the two
-core-loop events (new pending entry, confirmation). Remaining follow-up:
-extend the catalogue to discards, reversals, and relationship invites
-(the `notify_*` dispatch functions are the extension points).
+phase-status log in `CLAUDE.md`. The catalogue covers the two core-loop
+events (new pending entry, confirmation) plus discards, reversals, and
+relationship invites — every backend push dispatch a two-party ledger
+naturally produces. Any further events would ride the same `notify_*`
+dispatch pattern in `app/services/notifications.py`.
 
 ## Cross-cutting
 
