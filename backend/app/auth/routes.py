@@ -8,6 +8,7 @@ from flask import Blueprint, g, request
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
+from app.api._helpers import translates_service_errors
 from app.api._rate_limits import (
     change_password_limit,
     login_ip_limit,
@@ -29,6 +30,7 @@ from app.errors import error_response
 from app.extensions import db
 from app.models import AuthToken, User
 from app.services import account as account_service
+from app.services import devices as device_service
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
@@ -131,6 +133,34 @@ def logout():
     token: AuthToken = g.current_token
     token.revoked_at = datetime.now(UTC)
     db.session.commit()
+    return "", 204
+
+
+@auth_bp.post("/devices")
+@login_required
+@translates_service_errors
+def register_device():
+    """Register this device's push token for the caller."""
+    data = _json_body()
+    if data is None:
+        return error_response(400, "bad_request", "JSON body required.")
+    device = device_service.register_device(
+        g.current_user,
+        token=data.get("token"),
+        platform=data.get("platform", "android"),
+    )
+    return device.to_dict(), 200
+
+
+@auth_bp.delete("/devices")
+@login_required
+@translates_service_errors
+def unregister_device():
+    """Remove this device's push token (called on logout)."""
+    data = _json_body()
+    if data is None:
+        return error_response(400, "bad_request", "JSON body required.")
+    device_service.unregister_device(g.current_user, token=data.get("token"))
     return "", 204
 
 
