@@ -78,6 +78,60 @@ curl -s https://api.parity.rknepp.com/api/v1/health   # expect {"status":"ok",..
 
 `.env` and `instance/` are gitignored, so they survive the reset.
 
+## Push notifications (FCM)
+
+Push delivery (see [ADR-0001](adr/0001-push-notification-transport.md))
+is **off until each environment is given a Firebase service-account
+key**. With `FCM_CREDENTIALS_FILE` unset the backend uses a no-op sender,
+so this can be rolled out staging-first with no risk to production.
+
+Each environment points at its **own** Firebase project — production at
+`parity-production`, staging at `parity-staging` — so do the following
+once per environment (paths shown for production; use the
+`parity-staging` equivalents for staging).
+
+1. **Place the service-account key** outside the repo, owned by the
+   service user and readable only by it:
+
+   ```bash
+   sudo install -o ubuntu -g ubuntu -m 600 \
+     parity-production-firebase-adminsdk.json /etc/parity/fcm-production.json
+   ```
+
+   Generate the key in the Firebase console → Project settings → Service
+   accounts → **Generate new private key**. It is a secret — never commit
+   it, and keep it at `chmod 600`.
+
+2. **Point the environment at it** by adding one line to that
+   environment's `.env`:
+
+   ```bash
+   FCM_CREDENTIALS_FILE=/etc/parity/fcm-production.json
+   ```
+
+3. **Install the SDK.** `firebase-admin` is a base dependency, so the
+   standard deploy step (`.venv/bin/pip install -e .`) pulls it in; run
+   it now if you're enabling push outside a normal deploy.
+
+4. **Restart** the service (`sudo systemctl restart parity.service`) and
+   confirm boot is clean — a bad key logs a warning and falls back to the
+   no-op sender rather than crashing:
+
+   ```bash
+   journalctl -u parity.service --since "1 min ago" | grep -i fcm   # expect nothing
+   ```
+
+The Android **release** build talks to the production Firebase project
+and backend; **debug** builds talk to staging (the app pairs `BASE_URL`
+and `google-services.json` per build type). To verify end to end: sign in
+on a real device (it registers its push token), then have the
+counterparty account create a pending expense — a notification should
+arrive and deep-link to the relationship.
+
+**Rotating a key** (or after a leak): generate a new private key in the
+same console screen, replace the file, and restart. The old key stops
+working immediately.
+
 ## Backups
 
 The production ledger is a single SQLite file
