@@ -365,8 +365,18 @@ belongs to the caller (idempotent — always `204`). The client calls this
 on logout. Account deletion also purges the user's device tokens.
 
 The transport decision behind this (FCM) is recorded in
-[ADR-0001](../docs/adr/0001-push-notification-transport.md); message
-sending and the Android client land in follow-up stages.
+[ADR-0001](../docs/adr/0001-push-notification-transport.md).
+
+**Sending.** The server sends a push on two events: a **new pending
+entry** (to the counterparty who must confirm it) and a **confirmation**
+(to the creator whose entry was accepted), for both expenses and
+payments. Dispatch is **best-effort** — it runs after the ledger write
+has committed and any failure is logged and swallowed, so a dead push
+provider can never fail an expense or payment. Delivery uses FCM when
+`FCM_CREDENTIALS_FILE` is set (see [Environment
+variables](#environment-variables)); otherwise a no-op sender is used, so
+dev and test instances need no credentials. The Android client is a
+follow-up stage.
 
 ### Refresh
 
@@ -509,6 +519,7 @@ single self-hosted instance.
 | `RATELIMIT_REFRESH`             | `10 per hour`     | Per authenticated user cap on `POST /auth/refresh`. |
 | `TOKEN_ABSOLUTE_LIFETIME_DAYS`  | `365`             | Hard cap from a token's `created_at`. Past this, requests return `401 token_expired`. |
 | `TOKEN_IDLE_LIFETIME_DAYS`      | `30`              | Sliding cap from `last_used_at`. Past this without a successful request, the token expires. |
+| `FCM_CREDENTIALS_FILE`          | _(unset)_         | Path to a Google service-account JSON (FCM v1 API) for push notifications. Unset ⇒ push disabled (a no-op sender). Each environment points at its own project's file. |
 
 `GET` endpoints are not rate-limited. Hitting any limit returns HTTP
 429 with the standard error envelope (`code: "rate_limited"`, plus

@@ -72,6 +72,11 @@ coverage.xml
 .env.staging
 .env.test
 
+# Push / Firebase credentials (service-account keys — never commit)
+*firebase-adminsdk*.json
+*-service-account*.json
+google-services.json
+
 # Android
 .gradle/
 android/.gradle/
