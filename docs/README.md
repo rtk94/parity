@@ -19,3 +19,5 @@ Parity is designed for fair and transparent financial tracking between two parti
 - [Architecture](ARCHITECTURE.md): Detailed overview of the system architecture, data models, and Android app structure.
 - [API Reference](API_REFERENCE.md): Documentation of the RESTful API endpoints.
 - [Deployment](DEPLOYMENT.md): How prod and staging run on the VPS (native gunicorn + nginx + certbot), and how to deploy.
+- [Architecture Decision Records](adr/): Records of significant technical decisions and their trade-offs.
+  - [ADR-0001: Push notification transport](adr/0001-push-notification-transport.md) (Proposed)
