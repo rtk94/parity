@@ -14,7 +14,7 @@ import secrets
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
 
 from app.api._serializers import (
     iso8601_z,
@@ -25,7 +25,15 @@ from app.api._serializers import (
 )
 from app.auth.security import hash_password
 from app.extensions import db
-from app.models import AuthToken, Comment, Expense, Payment, Relationship, User
+from app.models import (
+    AuthToken,
+    Comment,
+    DeviceToken,
+    Expense,
+    Payment,
+    Relationship,
+    User,
+)
 
 
 def export_data(user: User) -> dict[str, Any]:
@@ -89,3 +97,6 @@ def delete_account(user: User) -> None:
         .where(AuthToken.user_id == user.id, AuthToken.revoked_at.is_(None))
         .values(revoked_at=now)
     )
+    # Push tokens are personal data and useless once the account is dead;
+    # remove them outright rather than leave them pointing at a tombstone.
+    db.session.execute(delete(DeviceToken).where(DeviceToken.user_id == user.id))
