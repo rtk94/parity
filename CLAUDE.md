@@ -4,11 +4,19 @@ Project-level guidance for Claude Code working in this repository.
 
 ## Project
 
-Parity is a self-hosted two-party expense and payment tracking ledger.
-The backend is Flask + SQLAlchemy 2.0 + SQLite. The Android client
-under `android/` is a full Kotlin + Jetpack Compose app (auth, the
-ledger UI, and the "Paper" design-system overhaul; see the Phase
-status below).
+Parity is a **centrally-hosted** two-party expense and payment tracking
+service (one official hosted instance holding user accounts and data),
+aimed at becoming a real public product. The backend is Flask +
+SQLAlchemy 2.0 + SQLite. The Android client under `android/` is a full
+Kotlin + Jetpack Compose app (auth, the ledger UI, and the "Paper"
+design-system overhaul; see the Phase status below).
+
+**Read [`docs/VISION.md`](docs/VISION.md) before any decision touching
+deployment, data, or third-party dependencies** — it is the source of
+truth for the product's vision and values. Note in particular that
+"self-hosted" is legacy framing from the early vision (self-hosting is
+now a possible *future fork*, not a mainline constraint); some docs
+still carry it and are being reconciled.
 
 Design notes, the full endpoint surface, and the example curl flow
 live in `README.md` and `backend/README.md`. Read those before

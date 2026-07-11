@@ -1,8 +1,19 @@
 # ADR-0001: Push notification transport
 
-**Status:** Proposed
+**Status:** Accepted
 **Date:** 2026-07-10
 **Deciders:** Repository owner (@rtk94)
+
+> **Note — recommendation revised during review.** This ADR was first
+> drafted recommending *UnifiedPush + polling*, on the premise that
+> Parity is a self-hosted, Google-free tool. During review that premise
+> was retired: Parity's mainline is now a **centrally-hosted public
+> product**, and "no Google Play Services" was recognised as an artefact
+> of the old self-hosted vision rather than a core value (see
+> [VISION.md](../VISION.md)). With that constraint lifted, the decision
+> flips to **FCM**. The full four-option analysis is retained below
+> because the reasoning — and the conditions under which a different
+> answer would win — remains useful.
 
 ## Context
 
@@ -10,8 +21,8 @@ Parity's core loop is two-party confirmation: one party logs an expense
 or payment, it sits `pending`, and it does not move the confirmed
 balance until the counterparty confirms it. The loop has a discovery
 gap — the counterparty has no way to learn that something is waiting
-for them except by opening the app. Push notifications ("Alex logged a
-$40 expense", "Sam confirmed your payment") close that gap and are the
+except by opening the app. Push notifications ("Alex logged a $40
+expense", "Sam confirmed your payment") close that gap and are the
 highest-leverage addition to the product's core value.
 
 This ADR decides **how notifications reach the device**. It does not
@@ -20,233 +31,201 @@ follow once the transport is fixed.
 
 ### Forces at play
 
-Several project realities constrain the choice more than they would for
-a typical app:
-
-- **Self-hosted, Google-free by design.** Parity is a self-hosted tool.
-  The "Paper" design system deliberately bundles its fonts offline
-  specifically to avoid a Google Play Services fetch, and the app ships
-  no Firebase/GMS dependency today. A transport that reintroduces a hard
-  Google dependency cuts against the project's stated identity.
+- **Centrally-hosted public product.** Parity is operated as a single
+  official hosted service (see [VISION.md](../VISION.md)). There is one
+  operator, so a transport that needs one cloud project (e.g. a single
+  Firebase project) carries **no per-deployment burden** — the earlier
+  objection that "every self-hoster would need their own Firebase
+  project" no longer applies.
+- **A hard Google dependency is acceptable on the mainline.** The
+  no-Google-Play-Services stance was a self-hosted-era artefact, not a
+  core value. It no longer rules options out.
 - **Synchronous backend, no broker.** The backend runs as gunicorn
-  synchronous workers (2 in production, 1 in staging) behind nginx on a
-  single VPS, over SQLite, with **no message queue or background-worker
-  infrastructure**. Long-lived connections (WebSockets) do not fit
-  synchronous workers, and there is no existing async surface or broker
-  to build streaming on. An **outbound HTTP POST fired during the
-  request** that flips an entry to `pending`, by contrast, fits the
-  current architecture with zero new infrastructure.
-- **Low event frequency.** A two-party personal ledger produces a
-  handful of entries per week, not per second. Real-time latency
-  measured in seconds is a nice-to-have, not a requirement; minutes is
-  tolerable.
-- **Android target levels.** `targetSdk = 36` means the Android 13+
-  `POST_NOTIFICATIONS` runtime permission is mandatory regardless of
+  synchronous workers behind nginx over SQLite, with no message queue or
+  background-worker infrastructure. Long-lived connections (WebSockets)
+  do not fit synchronous workers; an **outbound HTTP POST fired during
+  the request** that flips an entry to `pending` fits with zero new
+  infrastructure.
+- **Reliability matters for a public product.** Real users depending on
+  the service raise the bar on delivery reliability and battery
+  behaviour.
+- **Android target levels.** `targetSdk = 36` makes the Android 13+
+  `POST_NOTIFICATIONS` runtime permission mandatory regardless of
   transport. `minSdk = 28` is compatible with every option below.
-- **Single-maintainer project.** Per-deployment setup burden and
-  ongoing operational surface are real costs; simpler is materially
-  better here.
 
 ## Decision
 
-**Adopt UnifiedPush as Parity's push transport, with a WorkManager
-polling fallback for devices without a distributor.** Reject FCM as the
-default transport because it violates the self-hosted, Google-free
-principle, and reject a persistent WebSocket/long-poll channel because
-it is mismatched with the synchronous backend and does not deliver when
-the app is killed.
+**Adopt Firebase Cloud Messaging (FCM) as Parity's push transport.**
 
-Rationale in brief: UnifiedPush keeps the whole system Google-free and
-self-hostable, and — critically — the backend side is just an outbound
-POST to a per-device endpoint URL, which is the one push shape that fits
-the current synchronous gunicorn/SQLite backend without new
-infrastructure. Polling as a fallback means users who do not run a
-distributor still get notified (just less promptly), so no user is left
-without the feature, and it reuses the existing REST API with zero
-backend work.
-
-This is a **values-and-constraints call as much as a technical one**,
-so it is filed as *Proposed* pending owner sign-off rather than adopted
-unilaterally.
+Rationale: with the self-hosted constraint retired, FCM is the standard,
+most reliable Android push path, and its costs now fall away. The single
+Firebase project is owned by the one central service — no per-deployment
+burden — and the backend send is a simple best-effort outbound POST that
+fits the synchronous gunicorn/SQLite backend with no new infrastructure.
+FCM gives the best delivery and battery behaviour, including waking a
+killed app, which a public product wants. UnifiedPush and WorkManager
+polling are documented below as alternatives, and remain the likely
+choices for a future **self-hosted fork** whose values would again
+exclude a Google dependency.
 
 ## Options Considered
 
-### Option A: Firebase Cloud Messaging (FCM)
+### Option A: Firebase Cloud Messaging (FCM) — **chosen**
 
 The standard, "expected" Android push path.
 
 | Dimension | Assessment |
 |-----------|------------|
 | Complexity | Low client, low backend (outbound POST to FCM) |
-| Cost | Free tier ample; cost is the *dependency*, not dollars |
-| Ethos fit | **Poor** — hard Google/GMS dependency |
+| Cost | Free tier ample |
 | Reliability | Excellent — best-in-class delivery & battery |
-| Self-host burden | High — each operator needs a Firebase project |
+| Ethos fit (central) | **Good** — one operator, one Firebase project |
+| Killed-app delivery | Yes |
 
 **Pros:**
 - Most reliable delivery and best battery behaviour; wakes a killed app.
-- Well-documented, what most Android developers reach for first.
-- Backend send is a simple outbound POST — fits the sync backend.
+- Well-documented; what most Android developers reach for first.
+- Backend send is a simple outbound POST — fits the sync backend with no
+  new infrastructure.
+- One Firebase project owned by the central service — the per-deployment
+  burden that would exist for self-hosters does not apply here.
 
 **Cons:**
 - Requires Google Play Services on the device and a `google-services.json`
-  baked into the APK — a hard Google dependency in a tool whose identity
-  is self-hosted independence.
-- Every self-hoster who builds their own APK needs their **own** Firebase
-  project and server credentials — real per-deployment setup burden.
-- Routes every notification's metadata through Google's infrastructure.
+  in the app — a Google dependency. Acceptable on the central mainline;
+  disqualifying for a future self-hosted fork.
+- Notification metadata transits Google's infrastructure.
 
-### Option B: UnifiedPush (e.g. self-hosted or public ntfy distributor)
+### Option B: UnifiedPush (e.g. ntfy distributor)
 
-An open push standard: the device runs a *distributor* app (such as
-ntfy) that holds one connection to a push server; apps register through
-it and receive an **endpoint URL**; the Parity backend POSTs to that URL
-to deliver a message.
+An open push standard: the device runs a *distributor* app that holds
+the connection; apps register through it for an **endpoint URL**; the
+backend POSTs to that URL.
 
 | Dimension | Assessment |
 |-----------|------------|
-| Complexity | Medium client (library + registration), low backend |
-| Cost | Free; optional self-hosted ntfy is a small extra service |
-| Ethos fit | **Excellent** — Google-free, self-hostable end to end |
-| Reliability | Good — depends on the chosen distributor |
-| Self-host burden | Medium — user installs/points at a distributor |
+| Complexity | Medium client, low backend |
+| Cost | Free; optional self-hosted distributor |
+| Reliability | Good — depends on the distributor |
+| Ethos fit (central) | Neutral — Google-free but adds user friction |
+| Killed-app delivery | Yes, via the distributor |
 
 **Pros:**
-- Fully aligned with the self-hosted, Google-free identity; no GMS.
-- Backend side is identical in shape to FCM — an outbound POST to a
-  stored per-device endpoint — so it fits the synchronous backend with
-  no new infrastructure.
-- Operator/user can self-host the distributor (ntfy) or use a public one.
+- Google-free and self-hostable end to end — the natural pick for a
+  future self-hosted fork.
+- Backend side is identical in shape to FCM (outbound POST to a stored
+  endpoint).
 
 **Cons:**
-- The user must install a distributor app (e.g. ntfy) and, for full
-  independence, self-host it — more onboarding friction.
-- Smaller ecosystem; fewer worked examples than FCM.
-- Delivery reliability is only as good as the distributor the user picks.
+- The user must install a distributor app and, for full independence,
+  self-host it — onboarding friction that a public product should not
+  impose on ordinary users.
+- Smaller ecosystem; reliability depends on the chosen distributor.
 
 ### Option C: Persistent WebSocket / long-poll
 
-The app holds an open connection (or repeated long-polls) to the Parity
-backend, which streams events directly.
+The app holds an open connection to the backend, which streams events.
 
 | Dimension | Assessment |
 |-----------|------------|
 | Complexity | High client + **high backend** |
-| Cost | Higher — persistent connections, battery |
-| Ethos fit | Good — fully self-contained, no third party |
 | Reliability | Poor for background/killed-app delivery |
-| Self-host burden | Low for the operator, high engineering cost |
+| Backend fit | **Poor** — mismatched with sync workers |
+| Killed-app delivery | No (without a heavy foreground service) |
 
 **Pros:**
-- Fully self-contained — no distributor, no Google, no third party.
-- Lowest latency while the app is foregrounded and connected.
+- Fully self-contained; lowest latency while foregrounded.
 
 **Cons:**
-- **Mismatched with the backend.** Synchronous gunicorn workers (2 in
-  prod) cannot hold many persistent connections; this needs an ASGI/async
-  server or a separate long-lived service — a large architectural change.
-- Does not deliver when the app is killed without a foreground service,
-  which is heavy, battery-hostile, and increasingly restricted.
-- Highest ongoing engineering and operational cost for the weakest
-  background guarantees.
+- Mismatched with the synchronous gunicorn backend; would need an
+  ASGI/async server or a separate long-lived service.
+- No killed-app delivery without a battery-hostile foreground service.
+- Highest engineering/operational cost for the weakest background
+  guarantees.
 
 ### Option D: WorkManager periodic polling
 
-No push at all: a `WorkManager` job periodically hits the existing REST
-API for a pending count and raises a local notification on change.
+No push: a `WorkManager` job periodically hits the REST API for a
+pending count and raises a local notification on change.
 
 | Dimension | Assessment |
 |-----------|------------|
 | Complexity | Low client, **zero** backend |
-| Cost | Minimal |
-| Ethos fit | Excellent — reuses the existing REST API |
 | Reliability | Deterministic but delayed (≥15-min floor) |
-| Self-host burden | None |
+| Backend fit | Excellent — reuses existing REST |
+| Killed-app delivery | N/A (scheduled wake, not push) |
 
 **Pros:**
-- Simplest possible; no new backend work, no new infrastructure, no
-  third party, no Google.
+- Simplest possible; no new backend work, no third party.
 - Reuses the existing authenticated REST surface.
-- Given the low event frequency, "within ~15–30 minutes" may be entirely
-  acceptable for v1.
 
 **Cons:**
-- Not real-time — `WorkManager` enforces a 15-minute minimum interval,
-  and the OS may defer further under Doze.
-- Polls on a schedule regardless of activity — some wasted battery/network.
-- Not true "push"; a stopgap rather than a destination.
+- Not real-time — a 15-minute floor, deferred further under Doze.
+- Not true push; a stopgap rather than a destination.
 
 ## Trade-off Analysis
 
-The decisive constraints are **ethos fit** and **backend fit**, and they
-point the same way.
+Retiring the self-hosted constraint collapses what used to be the
+decisive trade-off. Previously *ethos* (no Google) ruled FCM out and
+*backend fit* ruled WebSocket out, leaving UnifiedPush and polling. Now:
 
-- **Ethos** eliminates FCM as the *default*. A self-hosted, deliberately
-  Google-free product should not make its flagship notification path
-  depend on Google Play Services and a per-operator Firebase project. (FCM
-  remains reasonable as an *optional* transport an operator could opt
-  into, but not as the project's chosen path.)
-- **Backend fit** eliminates WebSocket/long-poll. The synchronous
-  gunicorn/SQLite backend has no async surface or broker; streaming would
-  be a disproportionate architectural change for a two-party ledger, and
-  it still fails the killed-app case.
+- **FCM's only real cost — the Google dependency and per-deployment
+  Firebase burden — no longer bites.** There is one operator and one
+  Firebase project, and a Google dependency is acceptable on the
+  mainline.
+- **Backend fit** still eliminates WebSocket/long-poll: the synchronous
+  gunicorn/SQLite backend has no async surface, and streaming would be a
+  disproportionate change that still fails the killed-app case.
+- **Polling** remains a viable *stopgap* (it needs no backend work) but
+  is not the destination for a public product that wants prompt,
+  reliable delivery.
 
-That leaves the two outbound/pull options — UnifiedPush and polling —
-which are the two that fit both constraints. They are not really rivals:
-UnifiedPush is the real-time destination; polling is the zero-dependency
-floor. Adopting **UnifiedPush primary + polling fallback** means
-distributor users get prompt push while everyone else still gets
-notified, and the backend gains exactly one capability — POST to a stored
-endpoint — that is shared groundwork either way. Polling can even ship
-*first* as an interim if the UnifiedPush client integration slips,
-because it needs no backend changes.
+FCM therefore wins on the dimension a public product cares about most —
+reliable delivery, including to a killed app — while its costs now fall
+away. UnifiedPush stays the documented answer for a future self-hosted
+fork; keep the backend send behind a small transport-agnostic interface
+so that fork (or a change of heart) is cheap.
 
 ## Consequences
 
 **Easier:**
-- The core two-party loop gains timely discovery without compromising the
-  self-hosted, Google-free identity.
-- Backend push is a small, synchronous outbound POST — no broker, no async
-  rewrite, no new runtime.
-- A device-endpoint registration model is reusable groundwork if offline
-  sync is tackled later.
+- The core two-party loop gains prompt, reliable discovery.
+- Backend push is a small best-effort outbound POST — no broker, no async
+  rewrite.
+- A device-registration model is reusable groundwork if offline sync is
+  tackled later.
 
 **Harder / new surface:**
+- A Firebase project for the central service, with server credentials
+  held by the backend and `google-services.json` in the app build.
 - A new **device registration** concept on the backend: a table of
-  per-user UnifiedPush endpoint URLs, register/unregister endpoints, and a
-  send hook fired when an entry transitions to `pending` (and likely on
-  `confirm`). Endpoints are per-device secrets — treat them like tokens
-  (never log, revoke on logout).
-- Client onboarding now has to explain distributors to users who want
-  real-time push — a documentation and UX cost.
+  per-user FCM registration tokens, register/unregister endpoints, and a
+  send hook on the `pending` (and likely `confirm`) transitions. Treat
+  registration tokens like secrets — never log; revoke on logout.
 - `POST_NOTIFICATIONS` runtime-permission handling on Android 13+.
-- An outbound network call in the request path that flips an entry to
-  `pending` must be **fire-and-forget / best-effort** — a slow or dead
-  push endpoint must never block or fail the ledger write.
+- The send in the request path must be **best-effort / fire-and-forget** —
+  a slow or failing FCM call must never block or fail the ledger write.
+- A Google Play Services dependency now ships in the app (a change from
+  the previously GMS-free client).
 
 **To revisit:**
-- If UnifiedPush onboarding proves too high-friction for real users,
-  reconsider offering FCM as an *opt-in* transport behind the same
-  backend send abstraction.
-- If polling turns out to be good enough at this scale, UnifiedPush may
-  be deferred indefinitely — so build the send path behind an interface
-  that both can satisfy.
+- Keep the backend send behind a transport-agnostic interface so a future
+  self-hosted fork can swap FCM for UnifiedPush, and so polling can serve
+  as an interim, without reworking the call sites.
 
 ## Action Items
 
-1. [ ] Owner sign-off on the transport decision (moves this ADR to
-   *Accepted*).
-2. [ ] Design the backend device-registration schema (per-user endpoint
-   URLs) and register/unregister endpoints, following the immutable-ledger
-   and error-envelope conventions.
-3. [ ] Add a best-effort send hook on the `pending`/`confirm` transitions
-   behind a transport-agnostic interface (UnifiedPush POST first).
-4. [ ] Integrate a UnifiedPush client library on Android; handle
-   `POST_NOTIFICATIONS`, register the endpoint on login, revoke on logout.
-5. [ ] Deep-link notifications to the relevant relationship/entry screen.
-6. [ ] Add the WorkManager polling fallback for devices without a
-   distributor.
-7. [ ] Document distributor setup (self-hosted ntfy and a public option)
-   in `docs/`.
-8. [ ] Update `ROADMAP.md` (the push-notifications entry) and the CLAUDE.md
+1. [x] Owner sign-off on the transport decision — **FCM** (2026-07-10).
+2. [ ] Create the Firebase project for the central service; add
+   `google-services.json` to the app and server credentials to the
+   backend config.
+3. [ ] Design the backend device-registration schema (per-user FCM
+   tokens) and register/unregister endpoints, following the
+   immutable-ledger and error-envelope conventions.
+4. [ ] Add a best-effort send hook on the `pending`/`confirm` transitions
+   behind a transport-agnostic interface (FCM implementation first).
+5. [ ] Integrate the FCM client on Android; handle `POST_NOTIFICATIONS`,
+   register the token on login, revoke on logout.
+6. [ ] Deep-link notifications to the relevant relationship/entry screen.
+7. [ ] Update `ROADMAP.md` (the push-notifications entry) and the CLAUDE.md
    phase-status log once the work lands.
