@@ -34,6 +34,8 @@ class RelationshipListViewModelTest {
         override suspend fun refresh() = error("unused")
         override suspend fun changePassword(body: com.rknepp.parity.auth.data.dto.ChangePasswordRequest) = error("unused")
         override suspend fun updateProfile(body: com.rknepp.parity.auth.data.dto.UpdateProfileRequest) = error("unused")
+        override suspend fun exportData() = error("unused")
+        override suspend fun deleteAccount(body: com.rknepp.parity.auth.data.dto.DeleteAccountRequest) = error("unused")
     }
 
     private val fakeRelationshipApi = object : RelationshipApi {
