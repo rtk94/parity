@@ -15,6 +15,7 @@ import com.rknepp.parity.auth.events.AuthEvent
 import com.rknepp.parity.auth.events.AuthEventBus
 import com.rknepp.parity.home.data.MeRepository
 import com.rknepp.parity.network.ApiResult
+import com.rknepp.parity.push.PushRegistrar
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -55,6 +56,7 @@ class SettingsViewModel(
     private val authRepository: AuthRepository,
     private val adminRepository: AdminRepository,
     private val authEventBus: AuthEventBus,
+    private val pushRegistrar: PushRegistrar,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(SettingsState())
@@ -159,6 +161,9 @@ class SettingsViewModel(
         if (_state.value.isLoggingOut) return
         _state.update { it.copy(isLoggingOut = true) }
         viewModelScope.launch {
+            // Best-effort: drop this device's push registration first,
+            // while the session token is still valid to authorize it.
+            pushRegistrar.unregisterCurrentDevice()
             // Revokes the server-side token and clears the local store
             // regardless of the network outcome, then routes to login.
             authRepository.logout()
@@ -321,6 +326,7 @@ class SettingsViewModel(
                     locator.authRepository,
                     locator.adminRepository,
                     locator.authEventBus,
+                    locator.pushRegistrar,
                 )
             }
         }

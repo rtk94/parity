@@ -2,6 +2,7 @@ package com.rknepp.parity
 
 import android.app.Application
 import com.google.crypto.tink.aead.AeadConfig
+import com.rknepp.parity.push.PushNotifier
 
 class ParityApplication : Application() {
 
@@ -12,5 +13,6 @@ class ParityApplication : Application() {
         super.onCreate()
         AeadConfig.register()
         serviceLocator = ServiceLocator(this)
+        PushNotifier.ensureChannel(this)
     }
 }

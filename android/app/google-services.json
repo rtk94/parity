@@ -1,0 +1,30 @@
+{
+  "//": "PLACEHOLDER — not a real Firebase project. Exists so the Google Services plugin can build on CI and fresh clones. Real per-environment configs live at app/src/{debug,release}/google-services.json (gitignored) and override this fallback. See docs/DEPLOYMENT.md.",
+  "project_info": {
+    "project_number": "000000000000",
+    "project_id": "parity-placeholder",
+    "storage_bucket": "parity-placeholder.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:000000000000:android:0000000000000000000000",
+        "android_client_info": {
+          "package_name": "com.rknepp.parity"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyPLACEHOLDER0000000000000000000000000"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
