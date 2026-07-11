@@ -28,7 +28,11 @@ import com.rknepp.parity.relationships.ui.CreateRelationshipScreen
 import com.rknepp.parity.relationships.ui.RelationshipDetailScreen
 
 @Composable
-fun ParityNavHost(navController: NavHostController) {
+fun ParityNavHost(
+    navController: NavHostController,
+    deepLinkRelationshipId: Long? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+) {
     val locator = LocalServiceLocator.current
 
     val initialDestination by locator.startupGate.initialDestination
@@ -80,6 +84,8 @@ fun ParityNavHost(navController: NavHostController) {
                 onSessionExpiredConsumed = { sessionExpiredPending = false },
                 prefillUsername = args.prefillUsername.orEmpty(),
                 onLoggedIn = {
+                    // Register this device for push now that a session exists.
+                    locator.registerDeviceIfLoggedIn()
                     navController.navigate(Route.Home) {
                         popUpTo(0) { inclusive = true }
                         launchSingleTop = true
@@ -144,5 +150,15 @@ fun ParityNavHost(navController: NavHostController) {
                 onCreated = { navController.popBackStack() },
             )
         }
+    }
+
+    // Deep-link from a tapped notification: once on the signed-in graph,
+    // open the relationship. Consumed exactly once (dropped if logged out).
+    LaunchedEffect(deepLinkRelationshipId, start) {
+        val relationshipId = deepLinkRelationshipId ?: return@LaunchedEffect
+        if (start == StartupDestination.Home) {
+            navController.navigate(Route.RelationshipDetail(relationshipId))
+        }
+        onDeepLinkConsumed()
     }
 }

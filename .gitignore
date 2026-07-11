@@ -75,7 +75,11 @@ coverage.xml
 # Push / Firebase credentials (service-account keys — never commit)
 *firebase-adminsdk*.json
 *-service-account*.json
+# Real per-environment Firebase app configs are ignored; the structurally
+# valid placeholder at android/app/google-services.json IS committed so CI
+# and fresh clones can build (real src/{debug,release} files override it).
 google-services.json
+!/android/app/google-services.json
 
 # Android
 .gradle/

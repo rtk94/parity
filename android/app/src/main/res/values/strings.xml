@@ -2,6 +2,10 @@
 <resources>
     <string name="app_name">Parity</string>
 
+    <!-- Notifications -->
+    <string name="notif_channel_ledger_name">Ledger activity</string>
+    <string name="notif_channel_ledger_desc">New and confirmed expenses and payments</string>
+
     <!-- Shared -->
     <string name="password_show">Show</string>
     <string name="password_hide">Hide</string>
