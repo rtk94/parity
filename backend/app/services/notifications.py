@@ -1,15 +1,17 @@
 """Push notification dispatch (best-effort).
 
-Fires on the two core-loop events: a new pending entry (notify the
-counterparty who must confirm it) and a confirmation (notify the creator
-whose entry was accepted). Discards, reversals, and invites are not in
-the v1 catalogue — the ``notify_*`` functions below are the extension
-points for adding them.
+Catalogue:
+
+- a new pending entry → the counterparty who must confirm it;
+- a confirmation → the creator whose entry was accepted;
+- a discard → the other party, whose pending entry is now gone;
+- a reversal → the counterparty who must confirm the new reversing entry;
+- a relationship invite → the invited user.
 
 Every dispatch is best-effort: any failure — a dead push provider, a
 missing row — is swallowed and logged, never propagated. These are
-called *after* the ledger write has committed, so a notification problem
-must never surface as a failed expense/payment.
+called *after* the write has committed, so a notification problem must
+never surface as a failed expense/payment/invite.
 """
 
 from __future__ import annotations
@@ -132,4 +134,78 @@ def notify_payment_confirmed(payment: Payment) -> None:
         title="Payment confirmed",
         body=f"{confirmer.display_name} confirmed your {amount} payment.",
         data=_data("payment", "confirmed", payment.id, rel.id),
+    )
+
+
+@_best_effort
+def notify_expense_discarded(expense: Expense) -> None:
+    rel = db.session.get(Relationship, expense.relationship_id)
+    if rel is None:
+        return
+    actor = db.session.get(User, expense.discarded_by_user_id)
+    amount = _format_amount(expense.total_cents, rel.currency_code)
+    _dispatch(
+        _counterparty(rel, expense.discarded_by_user_id),
+        title="Expense discarded",
+        body=f"{actor.display_name} discarded a {amount} expense.",
+        data=_data("expense", "discarded", expense.id, rel.id),
+    )
+
+
+@_best_effort
+def notify_payment_discarded(payment: Payment) -> None:
+    rel = db.session.get(Relationship, payment.relationship_id)
+    if rel is None:
+        return
+    actor = db.session.get(User, payment.discarded_by_user_id)
+    amount = _format_amount(payment.amount_cents, rel.currency_code)
+    _dispatch(
+        _counterparty(rel, payment.discarded_by_user_id),
+        title="Payment discarded",
+        body=f"{actor.display_name} discarded a {amount} payment.",
+        data=_data("payment", "discarded", payment.id, rel.id),
+    )
+
+
+@_best_effort
+def notify_expense_reversed(reversal: Expense) -> None:
+    rel = db.session.get(Relationship, reversal.relationship_id)
+    if rel is None:
+        return
+    actor = db.session.get(User, reversal.created_by_user_id)
+    amount = _format_amount(reversal.total_cents, rel.currency_code)
+    _dispatch(
+        _counterparty(rel, reversal.created_by_user_id),
+        title="Expense reversed",
+        body=f"{actor.display_name} reversed a {amount} expense.",
+        data=_data("expense", "reversed", reversal.id, rel.id),
+    )
+
+
+@_best_effort
+def notify_payment_reversed(reversal: Payment) -> None:
+    rel = db.session.get(Relationship, reversal.relationship_id)
+    if rel is None:
+        return
+    actor = db.session.get(User, reversal.created_by_user_id)
+    amount = _format_amount(reversal.amount_cents, rel.currency_code)
+    _dispatch(
+        _counterparty(rel, reversal.created_by_user_id),
+        title="Payment reversed",
+        body=f"{actor.display_name} reversed a {amount} payment.",
+        data=_data("payment", "reversed", reversal.id, rel.id),
+    )
+
+
+@_best_effort
+def notify_relationship_invite(relationship: Relationship) -> None:
+    inviter = db.session.get(User, relationship.inviting_user_id)
+    _dispatch(
+        relationship.invited_user_id,
+        title="New invitation",
+        body=f"{inviter.display_name} invited you to a shared ledger.",
+        data={
+            "type": "relationship_invite",
+            "relationship_id": str(relationship.id),
+        },
     )

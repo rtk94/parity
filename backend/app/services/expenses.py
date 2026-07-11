@@ -273,6 +273,7 @@ def discard(user: User, expense_id: int, payload: dict[str, Any] | None) -> Expe
     expense.rejection_reason = reason
     log_action(user.id, "discard", "expense", expense.id, details=reason)
     db.session.commit()
+    notifications.notify_expense_discarded(expense)
     return expense
 
 
@@ -326,4 +327,5 @@ def reverse(user: User, expense_id: int) -> Expense:
     )
     db.session.commit()
     db.session.refresh(reversal)
+    notifications.notify_expense_reversed(reversal)
     return reversal
