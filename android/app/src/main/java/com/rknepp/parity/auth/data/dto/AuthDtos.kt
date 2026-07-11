@@ -32,3 +32,8 @@ data class ChangePasswordRequest(
     val current_password: String,
     val new_password: String,
 )
+
+@Serializable
+data class DeleteAccountRequest(
+    val password: String,
+)

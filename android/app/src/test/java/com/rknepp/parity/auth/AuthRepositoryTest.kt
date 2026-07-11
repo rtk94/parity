@@ -141,6 +141,34 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun deleteAccountSuccessClearsToken() = runBlocking {
+        tokenStore.set("seeded-token")
+        // 204 No Content — the anonymizing delete succeeded.
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = repo.deleteAccount("pw-alice")
+
+        assertTrue(result is ApiResult.Success)
+        assertNull(tokenStore.token.first())
+    }
+
+    @Test
+    fun deleteAccountWrongPasswordKeepsToken() = runBlocking {
+        tokenStore.set("seeded-token")
+        val body = """
+            {"error":{"code":"invalid_password","message":"Password confirmation is required to delete your account."}}
+        """.trimIndent()
+        server.enqueue(jsonResponse(403, body))
+
+        val result = repo.deleteAccount("wrong")
+
+        assertTrue(result is ApiResult.HttpFailure)
+        assertEquals("invalid_password", (result as ApiResult.HttpFailure).error?.code)
+        // The account is untouched, so the local session must survive.
+        assertEquals("seeded-token", tokenStore.token.first())
+    }
+
+    @Test
     fun verifyServerUrlSuccess() = runBlocking {
         server.enqueue(jsonResponse(200, """{"status":"ok","database":"ok"}"""))
         val result = repo.verifyServerUrl(server.url("/").toString().trimEnd('/'))

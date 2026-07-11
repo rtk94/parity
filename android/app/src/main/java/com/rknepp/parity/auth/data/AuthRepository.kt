@@ -1,5 +1,6 @@
 package com.rknepp.parity.auth.data
 
+import com.rknepp.parity.auth.data.dto.DeleteAccountRequest
 import com.rknepp.parity.auth.data.dto.LoginRequest
 import com.rknepp.parity.auth.data.dto.RegisterRequest
 import com.rknepp.parity.home.model.UserSummary
@@ -48,6 +49,20 @@ class AuthRepository(
         // stranded server-side row is preferable to keeping a local
         // session the user already abandoned.
         tokenStore.clear()
+        return result
+    }
+
+    /**
+     * Deletes (anonymizes) the caller's account. The password is
+     * re-confirmed server-side; a wrong password returns 403 and
+     * changes nothing, so the local token is cleared only on success —
+     * the server has revoked every token by then.
+     */
+    suspend fun deleteAccount(password: String): ApiResult<Unit> {
+        val result = apiCallUnit { authApiProvider().deleteAccount(DeleteAccountRequest(password)) }
+        if (result is ApiResult.Success) {
+            tokenStore.clear()
+        }
         return result
     }
 
