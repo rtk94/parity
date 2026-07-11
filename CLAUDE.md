@@ -99,11 +99,22 @@ in DB) that should not be casually broken.
   (release→production, debug→staging, each pairing `BASE_URL` with its
   own `google-services.json`), `POST_NOTIFICATIONS` handling, token
   register-on-login / unregister-on-logout, and notification-tap
-  deep-linking. The v1 catalogue is those two events;
-  discards/reversals/invites are left as extension points. Real
-  `google-services.json` files are gitignored (a committed placeholder
-  keeps CI/fresh-clone builds working). Go-live steps are in
-  `docs/DEPLOYMENT.md`.
+  deep-linking. Real `google-services.json` files are gitignored (a
+  committed placeholder keeps CI/fresh-clone builds working). Go-live
+  steps are in `docs/DEPLOYMENT.md`.
+- Post-Phase 8, push-notification catalogue extension (backend):
+  broadened the sender beyond the two core-loop events to cover the
+  remaining two-party ledger dispatches — a discard → the other party
+  (whose pending entry is gone), a reversal → the counterparty who must
+  confirm the new reversing entry, and a relationship invite → the
+  invited user. New `notify_*` functions in
+  `app/services/notifications.py` wired into the expense/payment
+  `discard`/`reverse` services and `relationships.invite_by_username`
+  (both commit branches); the bundled invite + first-entry flow fires
+  only the invite (the entry isn't actionable until the relationship is
+  accepted). Data payloads follow the existing `<kind>_<state>` deep-link
+  shape (`expense_discarded`, `payment_reversed`, `relationship_invite`,
+  …).
 - Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.

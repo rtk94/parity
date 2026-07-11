@@ -212,6 +212,7 @@ def discard(user: User, payment_id: int, payload: dict[str, Any] | None) -> Paym
     payment.rejection_reason = reason
     log_action(user.id, "discard", "payment", payment.id, details=reason)
     db.session.commit()
+    notifications.notify_payment_discarded(payment)
     return payment
 
 
@@ -256,4 +257,5 @@ def reverse(user: User, payment_id: int) -> Payment:
     )
     db.session.commit()
     db.session.refresh(reversal)
+    notifications.notify_payment_reversed(reversal)
     return reversal
