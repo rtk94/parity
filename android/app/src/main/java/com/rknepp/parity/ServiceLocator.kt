@@ -13,6 +13,7 @@ import com.rknepp.parity.ledger.data.LedgerRepository
 import com.rknepp.parity.network.AuthInterceptor
 import com.rknepp.parity.network.RetrofitFactory
 import com.rknepp.parity.network.TokenAuthenticator
+import com.rknepp.parity.push.PushRegistrar
 import com.rknepp.parity.relationships.data.RelationshipApi
 import com.rknepp.parity.relationships.data.RelationshipRepository
 import com.rknepp.parity.storage.AndroidKeystoreTinkAeadProvider
@@ -94,6 +95,24 @@ class ServiceLocator(context: Context) {
     val adminRepository = AdminRepository(
         apiProvider = ::requireAdminApi,
     )
+
+    val pushRegistrar = PushRegistrar(
+        authApiProvider = ::requireAuthApi,
+    )
+
+    /** Register a freshly-rotated FCM token (from the messaging service). */
+    fun onNewPushToken(token: String) {
+        appScope.launch { pushRegistrar.register(token) }
+    }
+
+    /** Register this device's push token if there is an active session. */
+    fun registerDeviceIfLoggedIn() {
+        appScope.launch {
+            if (tokenStore.token.firstOrNull() != null) {
+                pushRegistrar.registerCurrentDevice()
+            }
+        }
+    }
 
     init {
         // Build the Retrofit stack immediately with the hardcoded URL

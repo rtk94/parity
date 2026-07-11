@@ -38,6 +38,8 @@ class RelationshipDetailViewModelTest {
         override suspend fun updateProfile(body: com.rknepp.parity.auth.data.dto.UpdateProfileRequest) = error("unused")
         override suspend fun exportData() = error("unused")
         override suspend fun deleteAccount(body: com.rknepp.parity.auth.data.dto.DeleteAccountRequest) = error("unused")
+        override suspend fun registerDevice(body: com.rknepp.parity.auth.data.dto.RegisterDeviceRequest) = error("unused")
+        override suspend fun unregisterDevice(body: com.rknepp.parity.auth.data.dto.UnregisterDeviceRequest) = error("unused")
     }
 
     private val fakeRelationshipApi = object : RelationshipApi {
