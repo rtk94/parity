@@ -66,6 +66,19 @@ in DB) that should not be casually broken.
   (the FAB, currency chips, nav bar, and snackbars were falling back
   to baseline lavender) and stopped the Settings profile placeholder
   flashing before load.
+- Post-Phase 8, account data export + deletion (backend): a
+  GDPR-style `GET /me/export` (machine-readable JSON dump of the
+  caller's user record, relationships, expenses, payments, and
+  authored comments) and password-confirmed `DELETE /me`. Deletion is
+  **anonymization, not hard delete** — the owner's ledger rows are part
+  of the counterparty's financial record, so the row is retained but
+  renamed to "Deleted user"/`deleted_user_<id>`, its password hash
+  replaced with a random value, `is_admin` cleared, `deleted_at` set,
+  and all tokens revoked; login and `login_required` reject deleted
+  accounts (login keeps the constant-time dummy-verify), and the freed
+  username is reusable. Adds a nullable `user.deleted_at` column
+  (native SQLite `ADD COLUMN` migration) and `User.is_deleted`. No
+  Android UI yet.
 - Phase 9+ (planned): remaining roadmap items (offline, push, etc.).
 
 Update this section as phases land.
