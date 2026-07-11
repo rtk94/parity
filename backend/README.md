@@ -120,6 +120,8 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 | `POST` | `/auth/change-password` | Change the caller's password; revokes other sessions. |
 | `GET`  | `/auth/me` | Return the calling user (includes `is_admin` for the caller only). |
 | `PATCH` | `/auth/me` | Update the caller's profile (`display_name`). |
+| `GET`  | `/auth/me/export` | Machine-readable JSON dump of the caller's account (user, relationships, expenses, payments, comments). |
+| `DELETE` | `/auth/me` | Delete (anonymize) the caller's account; requires the password in the body. See below. |
 | `POST` | `/relationships` | Invite another user (optionally with a bundled first expense). |
 | `GET`  | `/relationships?status=&limit=&offset=` | List relationships visible to the caller. |
 | `GET`  | `/relationships/{id}` | Fetch one relationship. |
@@ -313,6 +315,32 @@ transaction. Distinct 422 codes — `invalid_request` (missing fields),
 `weak_password` (new password under 8 chars, with
 `details.min_length`), and `invalid_current_password` — let a client
 show specific UI without inferring from the message.
+
+### Account export and deletion
+
+`GET /auth/me/export` requires auth and returns a machine-readable JSON
+dump of everything tied to the caller: their user record, the
+relationships they belong to, and all expenses, payments, and
+comments they authored or are a party to.
+
+`DELETE /auth/me` requires auth and the account password in the body:
+
+```json
+{"password": "..."}
+```
+
+Returns `204 No Content` on success; a missing or wrong password
+returns `403 invalid_password` and changes nothing. Deletion is
+**anonymization, not a hard delete** — the caller's ledger entries are
+also part of the counterparty's financial record, so removing them
+would corrupt the other party's confirmed balance. Instead the row is
+retained but its identity is scrubbed: `username` becomes
+`deleted_user_<id>`, `display_name` becomes `Deleted user`, the
+password hash is replaced with a fresh random value, `is_admin` is
+cleared, `deleted_at` is stamped, and every outstanding token is
+revoked. Login and all authenticated requests then reject the account
+(login keeps the constant-time dummy-verify so deletion doesn't reopen
+username enumeration), and the freed username can be registered again.
 
 ### Refresh
 
