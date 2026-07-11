@@ -49,11 +49,15 @@ Read-only browsing of cached data when offline; queued writes that
 sync on reconnect. The Phase 6 plan is online-only with friendly "no
 connection" states. Deferred from Phase 6 planning.
 
-### Push notifications
+### Push notifications — shipped
 
-"The counterparty confirmed your expense" and similar push events.
-Requires FCM or a self-hosted equivalent. Deferred from Phase 2 OOS
-and Phase 6 planning.
+Delivered via FCM across backend (device registration + a best-effort
+sender) and the Android client; see
+[ADR-0001](docs/adr/0001-push-notification-transport.md) and the
+phase-status log in `CLAUDE.md`. The v1 catalogue covers the two
+core-loop events (new pending entry, confirmation). Remaining follow-up:
+extend the catalogue to discards, reversals, and relationship invites
+(the `notify_*` dispatch functions are the extension points).
 
 ## Cross-cutting
 

@@ -85,9 +85,26 @@ in DB) that should not be casually broken.
   and all tokens revoked; login and `login_required` reject deleted
   accounts (login keeps the constant-time dummy-verify), and the freed
   username is reusable. Adds a nullable `user.deleted_at` column
-  (native SQLite `ADD COLUMN` migration) and `User.is_deleted`. No
-  Android UI yet.
-- Phase 9+ (planned): remaining roadmap items (offline, push, etc.).
+  (native SQLite `ADD COLUMN` migration) and `User.is_deleted`. The
+  Android Settings screen exposes both (a "Download my data" export and
+  a password-confirmed account deletion).
+- Post-Phase 8, push notifications (FCM — see
+  `docs/adr/0001-push-notification-transport.md`): a `device_token`
+  model with `/auth/devices` register/unregister endpoints; a
+  best-effort, transport-agnostic sender that pushes on the two
+  core-loop events (a new pending entry → the counterparty; a
+  confirmation → the creator) for expenses and payments, gated on
+  `FCM_CREDENTIALS_FILE` (a no-op sender when unset); and an Android FCM
+  client — `firebase-messaging`, a per-build-type environment split
+  (release→production, debug→staging, each pairing `BASE_URL` with its
+  own `google-services.json`), `POST_NOTIFICATIONS` handling, token
+  register-on-login / unregister-on-logout, and notification-tap
+  deep-linking. The v1 catalogue is those two events;
+  discards/reversals/invites are left as extension points. Real
+  `google-services.json` files are gitignored (a committed placeholder
+  keeps CI/fresh-clone builds working). Go-live steps are in
+  `docs/DEPLOYMENT.md`.
+- Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.
 
