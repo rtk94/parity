@@ -11,12 +11,20 @@ import com.rknepp.parity.navigation.ParityNavHost
 import com.rknepp.parity.ui.theme.ParityTheme
 
 @Composable
-fun ParityApp(locator: ServiceLocator) {
+fun ParityApp(
+    locator: ServiceLocator,
+    deepLinkRelationshipId: Long? = null,
+    onDeepLinkConsumed: () -> Unit = {},
+) {
     ParityTheme {
         CompositionLocalProvider(LocalServiceLocator provides locator) {
             Surface(modifier = Modifier.fillMaxSize()) {
                 val navController = rememberNavController()
-                ParityNavHost(navController = navController)
+                ParityNavHost(
+                    navController = navController,
+                    deepLinkRelationshipId = deepLinkRelationshipId,
+                    onDeepLinkConsumed = onDeepLinkConsumed,
+                )
             }
         }
     }

@@ -3,7 +3,9 @@ package com.rknepp.parity.auth.data
 import com.rknepp.parity.auth.data.dto.DeleteAccountRequest
 import com.rknepp.parity.auth.data.dto.LoginRequest
 import com.rknepp.parity.auth.data.dto.LoginResponse
+import com.rknepp.parity.auth.data.dto.RegisterDeviceRequest
 import com.rknepp.parity.auth.data.dto.RegisterRequest
+import com.rknepp.parity.auth.data.dto.UnregisterDeviceRequest
 import com.rknepp.parity.home.model.UserSummary
 import kotlinx.serialization.json.JsonElement
 import retrofit2.Response
@@ -41,4 +43,10 @@ interface AuthApi {
     // required because Retrofit's @DELETE doesn't accept an @Body.
     @HTTP(method = "DELETE", path = "api/v1/auth/me", hasBody = true)
     suspend fun deleteAccount(@Body body: DeleteAccountRequest): Response<Unit>
+
+    @POST("api/v1/auth/devices")
+    suspend fun registerDevice(@Body body: RegisterDeviceRequest): Response<JsonElement>
+
+    @HTTP(method = "DELETE", path = "api/v1/auth/devices", hasBody = true)
+    suspend fun unregisterDevice(@Body body: UnregisterDeviceRequest): Response<Unit>
 }

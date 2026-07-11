@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.google.services)
 }
 
 android {
@@ -16,21 +17,26 @@ android {
         versionCode = 2
         versionName = "1.0.0"
 
-        buildConfigField("String", "BASE_URL", "\"https://api.parity.rknepp.com/\"")
-
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
+        // Environment is pinned to the build type: release targets
+        // production, debug targets staging. Each carries both its
+        // BASE_URL and its matching google-services.json (under
+        // src/release/ and src/debug/ respectively), so the backend and
+        // the Firebase project always switch together.
         release {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+            buildConfigField("String", "BASE_URL", "\"https://api.parity.rknepp.com/\"")
         }
         debug {
             isMinifyEnabled = false
+            buildConfigField("String", "BASE_URL", "\"https://staging-api.parity.rknepp.com/\"")
         }
     }
 
@@ -94,6 +100,9 @@ dependencies {
     implementation(libs.okhttp.logging.interceptor)
 
     implementation(libs.tink.android)
+
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.mockwebserver)
