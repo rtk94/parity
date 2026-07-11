@@ -1,5 +1,7 @@
 package com.rknepp.parity.settings.ui
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +40,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -62,6 +65,41 @@ fun SettingsScreen() {
     var newPasswordInput by remember { mutableStateOf("") }
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showResetConfirm by remember { mutableStateOf(false) }
+    var showDeleteConfirm by remember { mutableStateOf(false) }
+
+    // Data export: fetch JSON into state, then hand it to the system
+    // file-save dialog (Storage Access Framework — no permissions needed).
+    val context = LocalContext.current
+    var pendingExport by remember { mutableStateOf<String?>(null) }
+    val saveExportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        val data = pendingExport
+        pendingExport = null
+        if (uri != null && data != null) {
+            runCatching {
+                context.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(data.toByteArray())
+                }
+            }
+        }
+        vm.clearExportReady()
+    }
+
+    LaunchedEffect(state.exportReady) {
+        val ready = state.exportReady
+        if (ready != null) {
+            pendingExport = ready
+            saveExportLauncher.launch("parity-export.json")
+        }
+    }
+
+    LaunchedEffect(state.exportError) {
+        if (state.exportError != null) {
+            delay(5000)
+            vm.clearExportError()
+        }
+    }
 
     // Sync the loaded profile into the edit field once.
     LaunchedEffect(state.displayName) {
@@ -100,6 +138,20 @@ fun SettingsScreen() {
                 vm.resetLedger()
             },
             onDismiss = { showResetConfirm = false },
+        )
+    }
+
+    if (showDeleteConfirm) {
+        DeleteAccountDialog(
+            isDeleting = state.isDeleting,
+            error = state.deleteError,
+            onConfirm = { password -> vm.deleteAccount(password) },
+            onDismiss = {
+                if (!state.isDeleting) {
+                    showDeleteConfirm = false
+                    vm.clearDeleteError()
+                }
+            },
         )
     }
 
@@ -282,6 +334,69 @@ fun SettingsScreen() {
 
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+            // Data & privacy
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LabelCaps("Data & privacy", MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(
+                    "Download a copy of everything in your account — your " +
+                        "relationships, expenses, payments, and comments — as JSON.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (state.exportError != null) {
+                    Text(
+                        text = state.exportError!!,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                OutlinedButton(
+                    onClick = { vm.exportData() },
+                    enabled = !state.isExporting,
+                    shape = PillShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                ) {
+                    if (state.isExporting) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.padding(2.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    } else {
+                        Text("Download my data", style = MaterialTheme.typography.labelLarge)
+                    }
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+            // Danger zone
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                LabelCaps("Danger zone", MaterialTheme.colorScheme.error)
+                Text(
+                    "Deleting your account removes your name, login, and sessions. " +
+                        "Shared entries stay on your partner's ledger but show as " +
+                        "\"Deleted user.\" This cannot be undone.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedButton(
+                    onClick = { showDeleteConfirm = true },
+                    shape = PillShape,
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(52.dp),
+                ) {
+                    Text("Delete account…", style = MaterialTheme.typography.labelLarge)
+                }
+            }
+
+            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
             // Log out
             OutlinedButton(
                 onClick = { showLogoutConfirm = true },
@@ -426,6 +541,70 @@ private fun LabelCaps(text: String, color: Color, modifier: Modifier = Modifier)
         style = MaterialTheme.typography.labelSmall,
         color = color,
         modifier = modifier,
+    )
+}
+
+/**
+ * Password-confirmed account deletion. The confirm button stays disabled
+ * until a password is entered; the backend re-verifies it and returns 403
+ * on a mismatch, which surfaces here as [error].
+ */
+@Composable
+private fun DeleteAccountDialog(
+    isDeleting: Boolean,
+    error: String?,
+    onConfirm: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var password by remember { mutableStateOf("") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Delete your account?") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    "This permanently removes your name, login, and sessions. " +
+                        "Your shared entries stay on your partner's ledger but " +
+                        "will show as \"Deleted user.\" There is no undo.",
+                )
+                OutlinedTextField(
+                    value = password,
+                    onValueChange = { password = it },
+                    label = { Text("Confirm your password") },
+                    visualTransformation = PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Password,
+                        imeAction = ImeAction.Done,
+                    ),
+                    singleLine = true,
+                    enabled = !isDeleting,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                if (error != null) {
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(password) },
+                enabled = !isDeleting && password.isNotEmpty(),
+                colors = ButtonDefaults.textButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+            ) {
+                Text(if (isDeleting) "Deleting…" else "Delete account")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss, enabled = !isDeleting) {
+                Text("Cancel")
+            }
+        },
     )
 }
 
