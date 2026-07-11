@@ -26,6 +26,7 @@ from app.services import (
     NotFoundError,
     ServiceError,
     ValidationError,
+    notifications,
 )
 
 # Phase 5: the API accepts any three uppercase ASCII letters; the
@@ -114,6 +115,7 @@ def invite_by_username(
                 "relationship_exists",
                 "A relationship already exists between these users with this currency.",
             ) from None
+        notifications.notify_relationship_invite(rel)
         return rel, None
 
     # Bundled flow: flush the relationship to obtain its id, then stage
@@ -148,6 +150,7 @@ def invite_by_username(
         raise
 
     db.session.refresh(entry)
+    notifications.notify_relationship_invite(rel)
     return rel, entry
 
 
