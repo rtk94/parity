@@ -22,6 +22,7 @@ from app.services import (
     ForbiddenError,
     NotFoundError,
     ValidationError,
+    notifications,
 )
 from app.services.audit import log_action
 
@@ -150,6 +151,7 @@ def create(creator: User, payload: dict[str, Any] | None) -> Expense:
     log_action(creator.id, "create", "expense", expense.id)
     db.session.commit()
     db.session.refresh(expense)
+    notifications.notify_new_expense(expense)
     return expense
 
 
@@ -248,6 +250,7 @@ def confirm(user: User, expense_id: int) -> Expense:
     expense.confirmed_by_user_id = user.id
     log_action(user.id, "confirm", "expense", expense.id)
     db.session.commit()
+    notifications.notify_expense_confirmed(expense)
     return expense
 
 

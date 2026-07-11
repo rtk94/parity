@@ -30,6 +30,12 @@ class Config:
     TOKEN_ABSOLUTE_LIFETIME_DAYS: int = int(os.environ.get("TOKEN_ABSOLUTE_LIFETIME_DAYS", "365"))
     TOKEN_IDLE_LIFETIME_DAYS: int = int(os.environ.get("TOKEN_IDLE_LIFETIME_DAYS", "30"))
 
+    # Push notifications (FCM). Path to a Google service-account JSON with
+    # the Firebase Cloud Messaging API enabled. Unset -> push is disabled
+    # and a no-op sender is used (dev, tests, or any instance without
+    # credentials). Each environment (prod/staging) points at its own file.
+    FCM_CREDENTIALS_FILE: str | None = os.environ.get("FCM_CREDENTIALS_FILE") or None
+
 
 class DevelopmentConfig(Config):
     DEBUG: bool = True

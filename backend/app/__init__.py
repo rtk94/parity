@@ -62,6 +62,11 @@ def create_app(
     migrate.init_app(app, db)
     limiter.init_app(app)
 
+    # Push sender: a no-op unless FCM_CREDENTIALS_FILE is configured.
+    from app.services.push_sender import build_push_sender
+
+    app.extensions["push_sender"] = build_push_sender(app.config)
+
     # Import models so SQLAlchemy + Alembic see them.
     from app import models  # noqa: F401
     from app.api import (
