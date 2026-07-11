@@ -28,6 +28,18 @@ class User(db.Model):
         nullable=False,
         server_default=func.now(),
     )
+    # Set when the owner deletes their account. The row is retained
+    # (anonymized) rather than removed so the counterparty's shared
+    # ledger stays intact; a non-null value blocks login and token use.
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+        default=None,
+    )
+
+    @property
+    def is_deleted(self) -> bool:
+        return self.deleted_at is not None
 
     def to_public_dict(self) -> dict[str, object]:
         return {

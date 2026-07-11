@@ -28,6 +28,7 @@ from app.auth.security import (
 from app.errors import error_response
 from app.extensions import db
 from app.models import AuthToken, User
+from app.services import account as account_service
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
@@ -108,8 +109,8 @@ def login():
         return error_response(401, "invalid_credentials", "Invalid username or password.")
 
     user = db.session.execute(select(User).where(User.username == username)).scalar_one_or_none()
-    if user is None:
-        # Username does not exist. Run argon2 verify against a dummy
+    if user is None or user.is_deleted:
+        # Unknown or deleted account. Run argon2 verify against a dummy
         # hash anyway so this branch has the same wall-clock cost as
         # the "wrong password" branch — defeats username enumeration
         # by response-time analysis.
@@ -156,6 +157,32 @@ def update_profile():
 
     db.session.commit()
     return g.current_user.to_public_dict(), 200
+
+
+@auth_bp.get("/me/export")
+@login_required
+def export_account():
+    """Machine-readable dump of everything tied to the caller's account."""
+    return account_service.export_data(g.current_user), 200
+
+
+@auth_bp.delete("/me")
+@login_required
+def delete_account():
+    """Delete (anonymize) the caller's account. Requires the password.
+
+    The account row is retained but anonymized and its tokens revoked, so
+    the counterparty's shared ledger stays intact. This cannot be undone.
+    """
+    data = _json_body()
+    password = data.get("password") if isinstance(data, dict) else None
+    if not isinstance(password, str) or not verify_password(g.current_user.password_hash, password):
+        return error_response(
+            403, "invalid_password", "Password confirmation is required to delete your account."
+        )
+    account_service.delete_account(g.current_user)
+    db.session.commit()
+    return "", 204
 
 
 # Minimum password length enforced on ``change-password``. Matches the
