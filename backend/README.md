@@ -122,6 +122,8 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 | `PATCH` | `/auth/me` | Update the caller's profile (`display_name`). |
 | `GET`  | `/auth/me/export` | Machine-readable JSON dump of the caller's account (user, relationships, expenses, payments, comments). |
 | `DELETE` | `/auth/me` | Delete (anonymize) the caller's account; requires the password in the body. See below. |
+| `POST` | `/auth/devices` | Register this device's push token (`{token, platform?}`). |
+| `DELETE` | `/auth/devices` | Remove this device's push token (`{token}`); called on logout. |
 | `POST` | `/relationships` | Invite another user (optionally with a bundled first expense). |
 | `GET`  | `/relationships?status=&limit=&offset=` | List relationships visible to the caller. |
 | `GET`  | `/relationships/{id}` | Fetch one relationship. |
@@ -341,6 +343,30 @@ cleared, `deleted_at` is stamped, and every outstanding token is
 revoked. Login and all authenticated requests then reject the account
 (login keeps the constant-time dummy-verify so deletion doesn't reopen
 username enumeration), and the freed username can be registered again.
+
+### Push device registration
+
+`POST /auth/devices` registers the calling device's push token (an FCM
+registration token) so the server can notify the user. Body:
+
+```json
+{"token": "...", "platform": "android"}
+```
+
+`platform` is optional and defaults to `android`. Tokens are globally
+unique: registering a token that already exists **re-assigns** it to the
+caller (the same physical device signing in under a different account)
+rather than creating a duplicate. Returns `200` with a small device
+record — the raw token is never echoed back. A blank token is `422
+invalid_token`; an unsupported platform is `422 invalid_platform`.
+
+`DELETE /auth/devices` with `{"token": "..."}` removes the token if it
+belongs to the caller (idempotent — always `204`). The client calls this
+on logout. Account deletion also purges the user's device tokens.
+
+The transport decision behind this (FCM) is recorded in
+[ADR-0001](../docs/adr/0001-push-notification-transport.md); message
+sending and the Android client land in follow-up stages.
 
 ### Refresh
 

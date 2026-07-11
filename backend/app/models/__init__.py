@@ -7,6 +7,7 @@ from app.models import _triggers  # noqa: F401
 from app.models.audit import AuditLog
 from app.models.auth_token import AuthToken
 from app.models.comment import Comment
+from app.models.device_token import DeviceToken
 from app.models.expense import Expense, ExpenseStatus
 from app.models.expense_share import ExpenseShare
 from app.models.payment import Payment, PaymentStatus
@@ -17,6 +18,7 @@ __all__ = [
     "AuditLog",
     "AuthToken",
     "Comment",
+    "DeviceToken",
     "Expense",
     "ExpenseShare",
     "ExpenseStatus",
