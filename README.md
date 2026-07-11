@@ -1,6 +1,9 @@
 # Parity
 
-**Parity** is a self-hosted, two-party expense and payment tracking ledger.
+**Parity** is a centrally-hosted, two-party expense and payment tracking
+service — one official hosted instance, aimed at becoming a real public
+product. (See [`docs/VISION.md`](docs/VISION.md) for the vision and the
+values that guide its decisions.)
 The name carries three layered meanings, all relevant to what the app does:
 
 - **Mathematical parity** — evenness, the property of being divisible into two equal parts.
