@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 
 data class SettingsState(
     val profileLoaded: Boolean = false,
@@ -32,6 +34,14 @@ data class SettingsState(
     val passwordError: String? = null,
     val passwordSuccess: Boolean = false,
     val isLoggingOut: Boolean = false,
+    // Data export. `exportReady` carries the pretty-printed JSON for the
+    // UI to hand to the file-save dialog, then it's cleared.
+    val isExporting: Boolean = false,
+    val exportError: String? = null,
+    val exportReady: String? = null,
+    // Account deletion.
+    val isDeleting: Boolean = false,
+    val deleteError: String? = null,
     // System administration; populated only when the signed-in user
     // is the admin account.
     val isAdmin: Boolean = false,
@@ -49,6 +59,9 @@ class SettingsViewModel(
 
     private val _state = MutableStateFlow(SettingsState())
     val state: StateFlow<SettingsState> = _state.asStateFlow()
+
+    // Pretty-printed so the saved export file is human-readable.
+    private val exportJson = Json { prettyPrint = true }
 
     init {
         loadProfile()
@@ -152,6 +165,81 @@ class SettingsViewModel(
             _state.update { it.copy(isLoggingOut = false) }
             authEventBus.tryEmit(AuthEvent.LoggedOut)
         }
+    }
+
+    // --- Data export ----------------------------------------------------
+
+    fun exportData() {
+        if (_state.value.isExporting) return
+        _state.update { it.copy(isExporting = true, exportError = null) }
+        viewModelScope.launch {
+            when (val result = meRepository.exportData()) {
+                is ApiResult.Success -> _state.update {
+                    it.copy(
+                        isExporting = false,
+                        exportReady = exportJson.encodeToString(JsonElement.serializer(), result.data),
+                    )
+                }
+                is ApiResult.HttpFailure -> _state.update {
+                    it.copy(
+                        isExporting = false,
+                        exportError = result.error?.message ?: "Couldn't export your data.",
+                    )
+                }
+                else -> _state.update {
+                    it.copy(
+                        isExporting = false,
+                        exportError = "Couldn't export your data. Check your connection.",
+                    )
+                }
+            }
+        }
+    }
+
+    /** Called by the UI once the export JSON has been handed to the save dialog. */
+    fun clearExportReady() {
+        _state.update { it.copy(exportReady = null) }
+    }
+
+    fun clearExportError() {
+        _state.update { it.copy(exportError = null) }
+    }
+
+    // --- Account deletion -----------------------------------------------
+
+    fun deleteAccount(password: String) {
+        if (_state.value.isDeleting) return
+        if (password.isEmpty()) {
+            _state.update { it.copy(deleteError = "Enter your password to confirm.") }
+            return
+        }
+        _state.update { it.copy(isDeleting = true, deleteError = null) }
+        viewModelScope.launch {
+            when (val result = authRepository.deleteAccount(password)) {
+                is ApiResult.Success -> {
+                    _state.update { it.copy(isDeleting = false) }
+                    // Token is already cleared; route to login (no
+                    // "session expired" banner — this was deliberate).
+                    authEventBus.tryEmit(AuthEvent.LoggedOut)
+                }
+                is ApiResult.HttpFailure -> _state.update {
+                    it.copy(
+                        isDeleting = false,
+                        deleteError = result.error?.message ?: "Couldn't delete your account.",
+                    )
+                }
+                else -> _state.update {
+                    it.copy(
+                        isDeleting = false,
+                        deleteError = "Couldn't delete your account. Check your connection.",
+                    )
+                }
+            }
+        }
+    }
+
+    fun clearDeleteError() {
+        _state.update { it.copy(deleteError = null) }
     }
 
     // --- System administration -----------------------------------------
