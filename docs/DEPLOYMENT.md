@@ -40,6 +40,34 @@ Each environment is fully isolated: separate directory, virtualenv,
 database, secret, systemd unit, and nginx vhost. Staging exists to bake
 a release before it reaches production.
 
+## Configuration & secrets
+
+Each environment is configured entirely by its own `.env` in the service
+working directory (`/var/www/parity/backend/.env`, and the
+`parity-staging` equivalent), loaded by python-dotenv from
+[`app/config.py`](../backend/app/config.py). `.env` is gitignored, so it
+survives the `git reset --hard` on deploy. Keys:
+
+- `SECRET_KEY` — **unique per environment**, secret. Generate with
+  `python -c "import secrets; print(secrets.token_urlsafe(48))"`.
+- `DATABASE_URL` — defaults to that environment's SQLite file.
+- `FCM_CREDENTIALS_FILE` — path to the Firebase service-account JSON for
+  push; unset ⇒ push disabled (see below).
+
+> **Load order matters.** `Config` reads the environment when
+> `app.config` is first imported, so `.env` must be loaded *before* that.
+> `app/config.py` does this at module top. (A prior bug loaded `.env`
+> too late in `app/__init__.py`, so every value silently fell back to its
+> default — including `SECRET_KEY` running as the dev default in
+> production. Fixed by loading `.env` in `app/config.py`; the systemd
+> units need no `EnvironmentFile`.) After changing this, confirm a real
+> secret is in use:
+>
+> ```bash
+> cd /var/www/parity/backend
+> .venv/bin/python -c "import app; print(app.create_app().config['SECRET_KEY'] != 'dev-only-not-secret')"  # expect True
+> ```
+
 ## TLS
 
 Certificates are issued and installed with `certbot --nginx` and renew
@@ -126,7 +154,12 @@ and backend; **debug** builds talk to staging (the app pairs `BASE_URL`
 and `google-services.json` per build type). To verify end to end: sign in
 on a real device (it registers its push token), then have the
 counterparty account create a pending expense — a notification should
-arrive and deep-link to the relationship.
+arrive and deep-link to the relationship. This flow was verified on
+staging against a physical device. Two gotchas seen during that test:
+FCM **throttles** rapid repeated sends to one device (space out test
+sends), and after enabling push confirm the app didn't fall back to the
+no-op sender — with the credentials file set, `create_app().extensions["push_sender"]`
+should be `FcmPushSender`, not `NullPushSender`.
 
 **Rotating a key** (or after a leak): generate a new private key in the
 same console screen, replace the file, and restart. The old key stops
