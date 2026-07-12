@@ -5,6 +5,17 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from dotenv import find_dotenv, load_dotenv
+
+# Load .env *before* the Config classes below read os.environ at
+# class-definition time. This module is imported (by app/__init__.py and
+# the Flask CLI) before any other load_dotenv() call would run, so doing
+# it here is what actually lets SECRET_KEY / DATABASE_URL /
+# FCM_CREDENTIALS_FILE reach config. Search from the working directory,
+# which is backend/ under gunicorn (systemd WorkingDirectory) and
+# `flask run`. A missing .env is a no-op.
+load_dotenv(find_dotenv(usecwd=True))
+
 
 class Config:
     SECRET_KEY: str = os.environ.get("SECRET_KEY", "dev-only-not-secret")

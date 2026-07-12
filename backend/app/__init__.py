@@ -6,17 +6,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-from dotenv import load_dotenv
 from flask import Flask
 from sqlalchemy import event
 from sqlalchemy.engine import Engine
 
+# NB: app.config loads .env at import time (see app/config.py). It must be
+# imported before anything that reads configuration.
 from app.config import resolve_config
 from app.errors import register_error_handlers
 from app.extensions import db, limiter, migrate
-
-# Load .env if present so config picks up SECRET_KEY / DATABASE_URL.
-load_dotenv()
 
 
 @event.listens_for(Engine, "connect")
