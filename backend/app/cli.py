@@ -12,6 +12,7 @@ from app.auth.security import hash_password
 from app.extensions import db
 from app.models import AuthToken, User
 from app.services import admin as admin_service
+from app.services import recurring as recurring_service
 
 cli_bp = Blueprint("cli", __name__, cli_group=None)
 
@@ -21,6 +22,17 @@ def cleanup_tokens() -> None:
     """Remove expired and revoked auth tokens from the database."""
     deleted = admin_service.cleanup_tokens()
     click.echo(f"Deleted {deleted} expired/revoked tokens.")
+
+
+@cli_bp.cli.command("run-recurring")
+def run_recurring() -> None:
+    """Generate pending expenses for every recurring template now due.
+
+    Intended to run from a daily cron. Idempotent within a day: a
+    template fires at most once per invocation.
+    """
+    generated = recurring_service.run_due()
+    click.echo(f"Generated {generated} pending expense(s) from recurring templates.")
 
 
 @cli_bp.cli.command("create-admin")

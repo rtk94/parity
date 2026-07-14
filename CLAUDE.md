@@ -126,6 +126,22 @@ in DB) that should not be casually broken.
   accepted). Data payloads follow the existing `<kind>_<state>` deep-link
   shape (`expense_discarded`, `payment_reversed`, `relationship_invite`,
   …).
+- Post-Phase 8, recurring expenses (backend, closes #11): a
+  `recurring_expense` template table (+ `recurring_expense_share` child,
+  mirroring expense/expense_share) holding a payer, total, description,
+  optional category, shares, a `daily`/`weekly`/`monthly` `interval`,
+  and a `next_run_on` date. Templates are mutable config, not ledger
+  rows: a `/api/v1/recurring` CRUD blueprint (create/list/get/PATCH
+  pause-resume-reschedule-edit/DELETE) manages them, and
+  `app/services/recurring.py::run_due` materialises a pending expense
+  (via the shared `expenses._stage_expense_against`) for every active
+  template on an accepted relationship that has come due. Generation
+  fires **at most one entry per template per run** (advancing
+  `next_run_on` by one interval), so a daily `flask run-recurring` cron
+  is idempotent within a day and a dormant template catches up one
+  period per run instead of flooding the ledger; monthly advances clamp
+  to the last valid day of short months. Generated entries flow through
+  the normal two-party confirmation and fire the usual new-expense push.
 - Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.
