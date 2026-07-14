@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Parity themed (monochrome) layer for Android 13+. Single-tint equals mark;
+     the system recolors it to match the user's wallpaper/theme. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#000000"
+        android:pathData="M31.5,33.5 L76.5,33.5 A6.5,6.5 0 0 1 76.5,46.5 L31.5,46.5 A6.5,6.5 0 0 1 31.5,33.5 Z" />
+    <path
+        android:fillColor="#000000"
+        android:pathData="M31.5,61.5 L76.5,61.5 A6.5,6.5 0 0 1 76.5,74.5 L31.5,74.5 A6.5,6.5 0 0 1 31.5,61.5 Z" />
+</vector>

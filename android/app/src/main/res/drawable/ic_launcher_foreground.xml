@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Parity adaptive icon foreground: two equal "party" bars on the 108dp canvas.
+     Content sits inside the 66dp keyline circle. Top bar = ink, bottom bar = forest green. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="#14140F"
+        android:pathData="M31.5,33.5 L76.5,33.5 A6.5,6.5 0 0 1 76.5,46.5 L31.5,46.5 A6.5,6.5 0 0 1 31.5,33.5 Z" />
+    <path
+        android:fillColor="#2F6B45"
+        android:pathData="M31.5,61.5 L76.5,61.5 A6.5,6.5 0 0 1 76.5,74.5 L31.5,74.5 A6.5,6.5 0 0 1 31.5,61.5 Z" />
+</vector>
