@@ -142,6 +142,22 @@ in DB) that should not be casually broken.
   period per run instead of flooding the ledger; monthly advances clamp
   to the last valid day of short months. Generated entries flow through
   the normal two-party confirmation and fire the usual new-expense push.
+- Post-Phase 8, password reset (backend, closes #7 — see
+  `docs/adr/0002-password-reset-transport.md`): accounts gained an
+  optional, unique `user.email` (settable at registration and
+  `PATCH /me`, in `to_private_dict` + the data export but **never**
+  `to_public_dict`, cleared on account deletion); a transport-agnostic,
+  config-gated email sender (`app/services/email_sender.py` — a no-op
+  `NullEmailSender` until `MAIL_SERVER` is set, an stdlib
+  `SmtpEmailSender` otherwise, mirroring the FCM `push_sender`); a
+  hashed, single-use, short-lived `password_reset_token` (only the
+  SHA-256 of the raw token is stored, like `auth_token`); and two
+  endpoints — `POST /auth/password-reset/request` (enumeration-resistant,
+  always `204`; mints a token and best-effort emails it) and `/confirm`
+  (validates the token, sets the new password, and revokes **every**
+  session). Email transport stays off (safe no-op) until SMTP is
+  configured, rollable-out staging-first like push. The Android
+  forgot-password UI is a planned follow-up.
 - Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.

@@ -84,6 +84,15 @@ def register_limit():
     return limiter.limit(lambda: current_app.config["RATELIMIT_REGISTER"])
 
 
+def password_reset_limit():
+    """Return the per-IP password-reset limit decorator.
+
+    Keyed by IP (the request is unauthenticated) to cap both reset-email
+    spamming and token-guessing attempts.
+    """
+    return limiter.limit(lambda: current_app.config["RATELIMIT_PASSWORD_RESET"])
+
+
 def login_username_key_func() -> str | None:
     if not request.is_json:
         return None

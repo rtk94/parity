@@ -17,6 +17,11 @@ class User(db.Model):
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Optional recovery address (see ADR-0002). Unique so it can key a
+    # password-reset request; nullable because it is opt-in. SQLite allows
+    # many NULLs under a UNIQUE column, so email-less accounts coexist.
+    # Never exposed via to_public_dict — the counterparty must not see it.
+    email: Mapped[str | None] = mapped_column(String(255), unique=True, nullable=True)
     is_admin: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
@@ -49,5 +54,5 @@ class User(db.Model):
         }
 
     def to_private_dict(self) -> dict[str, object]:
-        """Self-view: public fields plus flags only the owner should see."""
-        return self.to_public_dict() | {"is_admin": self.is_admin}
+        """Self-view: public fields plus data only the owner should see."""
+        return self.to_public_dict() | {"is_admin": self.is_admin, "email": self.email}

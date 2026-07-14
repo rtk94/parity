@@ -165,6 +165,36 @@ should be `FcmPushSender`, not `NullPushSender`.
 same console screen, replace the file, and restart. The old key stops
 working immediately.
 
+## Outbound email (password reset)
+
+Self-service password reset (see
+[ADR-0002](adr/0002-password-reset-transport.md)) emails a single-use
+token to the account's recovery address. Delivery is **off until each
+environment is given SMTP settings** — with `MAIL_SERVER` unset the
+backend uses a no-op sender, so `POST /auth/password-reset/request` still
+returns `204` but delivers nothing. Like FCM, this can be rolled out
+staging-first with no risk to production.
+
+The transport is provider-agnostic SMTP, so point it at whatever relay
+the environment uses (Amazon SES, Postmark, a self-managed server).
+Set in `.env` (see `backend/.env.example`):
+
+```bash
+MAIL_SERVER=email-smtp.us-east-1.amazonaws.com
+MAIL_PORT=587
+MAIL_USERNAME=<smtp-username>
+MAIL_PASSWORD=<smtp-password>          # a relay credential, not an account password
+MAIL_USE_TLS=true
+MAIL_FROM=no-reply@parity.rknepp.com   # must be a verified sender for the relay
+PASSWORD_RESET_URL_BASE=https://parity.rknepp.com/reset  # raw token appended
+PASSWORD_RESET_LIFETIME_MINUTES=60
+```
+
+After configuring, restart the service and verify end to end: set an
+email on a test account (`PATCH /auth/me`), request a reset, and confirm
+the message arrives. `create_app().extensions["email_sender"]` should be
+`SmtpEmailSender`, not `NullEmailSender`, once `MAIL_SERVER` is set.
+
 ## Scheduled jobs
 
 Two maintenance commands are meant to run on a timer. Both are Flask CLI
