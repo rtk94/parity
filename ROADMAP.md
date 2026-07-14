@@ -47,10 +47,16 @@ Currently a forgotten password is unrecoverable without server-side DB
 access. A reset flow would require an email or recovery channel that
 does not exist yet. Deferred from Phase 4. (Issue #7.)
 
-### Recurring expenses (Issue #11)
+### Recurring expenses — shipped
 
-Templates that auto-create pending expenses on a schedule. Deferred
-from Phase 2.
+Templates that auto-create pending expenses on a schedule. A
+`recurring_expense` template (payer, total, shares, category, and a
+`daily`/`weekly`/`monthly` interval with a `next_run_on` date) is
+managed through the `/api/v1/recurring` CRUD blueprint;
+`app/services/recurring.py::run_due` — wired to the `flask
+run-recurring` CLI for a daily cron — materialises a pending expense per
+due template, firing at most once per template per run. Closes issue
+#11. The Android UI for managing templates is a possible follow-up.
 
 ### Attachments on expenses
 

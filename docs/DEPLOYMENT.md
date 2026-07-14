@@ -165,6 +165,26 @@ should be `FcmPushSender`, not `NullPushSender`.
 same console screen, replace the file, and restart. The old key stops
 working immediately.
 
+## Scheduled jobs
+
+Two maintenance commands are meant to run on a timer. Both are Flask CLI
+commands invoked from the backend virtualenv with the service
+environment loaded (so `SECRET_KEY` and `DATABASE_URL` resolve the same
+way the app does):
+
+- **`flask run-recurring`** — materialises a pending expense for every
+  recurring template that has come due. Run it **once a day**; it is
+  idempotent within a day (a template fires at most once per
+  invocation), so an occasional missed or doubled run is harmless.
+- **`flask cleanup-tokens`** — purges expired and revoked `auth_token`
+  rows. Run it periodically (e.g. weekly); it is purely housekeeping.
+
+Example daily systemd timer (or cron `@daily`) for recurring generation:
+
+```bash
+cd /var/www/parity/backend && .venv/bin/flask run-recurring
+```
+
 ## Backups
 
 The production ledger is a single SQLite file

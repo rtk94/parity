@@ -119,6 +119,40 @@ def make_expense(
     return expense
 
 
+def make_recurring_expense(
+    client: FlaskClient,
+    creator_token: str,
+    *,
+    relationship_id: int,
+    payer_user_id: int,
+    total_cents: int,
+    shares: list[dict[str, int]],
+    interval: str = "monthly",
+    description: str = "Rent",
+    category: str | None = None,
+    start_on: str | None = None,
+) -> dict[str, Any]:
+    body: dict[str, Any] = {
+        "relationship_id": relationship_id,
+        "payer_user_id": payer_user_id,
+        "total_cents": total_cents,
+        "description": description,
+        "shares": shares,
+        "interval": interval,
+    }
+    if category is not None:
+        body["category"] = category
+    if start_on is not None:
+        body["start_on"] = start_on
+    response = client.post(
+        "/api/v1/recurring",
+        json=body,
+        headers=auth_headers(creator_token),
+    )
+    assert response.status_code == 201, response.get_json()
+    return response.get_json()
+
+
 def make_payment(
     client: FlaskClient,
     creator_token: str,
