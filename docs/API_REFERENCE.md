@@ -39,6 +39,16 @@ Parity exposes a RESTful API over HTTPS. All endpoints (except health, auth/logi
 ## Pending
 - `GET /api/v1/pending`: Expenses and payments across all relationships awaiting the caller's confirmation, for the dashboard "needs you" view. Returns `{"expenses": [...], "payments": [...]}`.
 
+## Recurring expenses
+Templates that generate pending expenses on a schedule. The generated entries appear through the normal expense endpoints; these routes only manage the templates.
+- `GET /api/v1/recurring`: List recurring templates (accepts `relationship_id`, `active=true|false`, and pagination).
+- `GET /api/v1/recurring/<id>`: Fetch a single template.
+- `POST /api/v1/recurring`: Create a template (`relationship_id`, `payer_user_id`, `total_cents`, `description`, `shares`, `interval` one of `daily`/`weekly`/`monthly`, optional `category` and `start_on` date defaulting to today).
+- `PATCH /api/v1/recurring/<id>`: Update a template — pause/resume (`active`), reschedule (`next_run_on`), or edit fields (`total_cents` + `shares` must change together).
+- `DELETE /api/v1/recurring/<id>`: Delete a template.
+
+Generation is driven by the `flask run-recurring` CLI command (intended for a daily cron), which materialises one pending expense per due template.
+
 ## Comments
 - `GET /api/v1/expenses/<id>/comments`: List comments on an expense.
 - `POST /api/v1/expenses/<id>/comments`: Post a comment on an expense.

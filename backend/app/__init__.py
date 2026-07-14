@@ -73,6 +73,7 @@ def create_app(
         health_bp,
         payments_bp,
         pending_bp,
+        recurring_bp,
         relationships_bp,
     )
     from app.auth import auth_bp
@@ -84,6 +85,7 @@ def create_app(
     app.register_blueprint(expenses_bp)
     app.register_blueprint(payments_bp)
     app.register_blueprint(pending_bp)
+    app.register_blueprint(recurring_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(cli_bp)
 
