@@ -11,6 +11,8 @@ from app.models.device_token import DeviceToken
 from app.models.expense import Expense, ExpenseStatus
 from app.models.expense_share import ExpenseShare
 from app.models.payment import Payment, PaymentStatus
+from app.models.recurring_expense import RecurringExpense, RecurringInterval
+from app.models.recurring_expense_share import RecurringExpenseShare
 from app.models.relationship import Relationship, RelationshipStatus
 from app.models.user import User
 
@@ -24,6 +26,9 @@ __all__ = [
     "ExpenseStatus",
     "Payment",
     "PaymentStatus",
+    "RecurringExpense",
+    "RecurringExpenseShare",
+    "RecurringInterval",
     "Relationship",
     "RelationshipStatus",
     "User",

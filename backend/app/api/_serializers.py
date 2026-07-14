@@ -10,7 +10,14 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-from app.models import Comment, Expense, Payment, Relationship, User
+from app.models import (
+    Comment,
+    Expense,
+    Payment,
+    RecurringExpense,
+    Relationship,
+    User,
+)
 from app.services.balance import BalanceView
 
 
@@ -87,6 +94,27 @@ def serialize_balance_view(bv: BalanceView) -> dict[str, Any]:
         "net_cents": bv.net_cents,
         "from_user_id": bv.from_user_id,
         "to_user_id": bv.to_user_id,
+    }
+
+
+def serialize_recurring_expense(template: RecurringExpense) -> dict[str, Any]:
+    return {
+        "id": template.id,
+        "relationship_id": template.relationship_id,
+        "payer_user_id": template.payer_user_id,
+        "total_cents": template.total_cents,
+        "description": template.description,
+        "category": template.category,
+        "interval": template.interval.value,
+        "next_run_on": template.next_run_on.isoformat(),
+        "active": template.active,
+        "created_by_user_id": template.created_by_user_id,
+        "created_at": iso8601_z(template.created_at),
+        "last_run_at": iso8601_z(template.last_run_at),
+        "shares": [
+            {"user_id": share.user_id, "amount_cents": share.amount_cents}
+            for share in template.shares
+        ],
     }
 
 
