@@ -40,6 +40,17 @@ in DB) that should not be casually broken.
 - Backend, post-Phase 5: bundled invite + first *payment* (the
   payment-flavoured parallel of the Phase 4 first-expense flow);
   reject now cascade-discards pending payments as well as expenses.
+- Backend, post-Phase 5 top-shelf batch (commits `f7f49ba`,
+  `acf09d5`): free-text **comments** on expenses and payments
+  (`app/services/comments.py`, create/list endpoints on both entry
+  types, `comment` table — closes #13); expense **categories** (a
+  nullable `expense.category` column, validated in the service —
+  closes #10); **audit logging** (`app/services/audit.py` +
+  `audit_log` table — closes #9); **multi-currency per pair** (the
+  Phase 2 symmetric-uniqueness index relaxed to include
+  `currency_code`, so a user pair can hold one accepted relationship
+  per currency — closes #5); and an `auth_token` cleanup command
+  (`flask cleanup-tokens` + `/admin/cleanup-tokens` — closes #8).
 - Phase 7 ✓: Android ledger UI on top of the auth skeleton (relationships, expenses, payments, balances).
 - Phase 8 ✓: Android UI overhaul — branded Material 3 theme
   (light/dark), dashboard home tab (per-currency net position, invite

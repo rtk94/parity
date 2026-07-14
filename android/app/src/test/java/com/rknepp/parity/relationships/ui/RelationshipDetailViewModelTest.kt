@@ -68,7 +68,7 @@ class RelationshipDetailViewModelTest {
             return Response.success(com.rknepp.parity.ledger.data.dto.PaymentListResponse(emptyList(), 0, 100, 0))
         }
         override suspend fun createPayment(request: com.rknepp.parity.ledger.data.dto.CreatePaymentRequest): Response<com.rknepp.parity.ledger.data.dto.PaymentDto> {
-            TODO("Not yet implemented")
+            return Response.success(com.rknepp.parity.ledger.data.dto.PaymentDto(1L, request.relationship_id, request.from_user_id, request.to_user_id, request.amount_cents, request.description, 1L, "2024-01-01T00:00:00Z", "pending"))
         }
         override suspend fun confirmPayment(id: Long): Response<com.rknepp.parity.ledger.data.dto.PaymentDto> {
             return Response.success(com.rknepp.parity.ledger.data.dto.PaymentDto(id, 1L, 1L, 2L, 500, "payment", 1L, "2024-01-01T00:00:00Z", "confirmed", "2024-01-01T00:00:00Z", 1L, null, null, null, null))
