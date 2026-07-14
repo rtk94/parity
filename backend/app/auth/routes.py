@@ -13,6 +13,7 @@ from app.api._rate_limits import (
     change_password_limit,
     login_ip_limit,
     login_username_limit,
+    password_reset_limit,
     refresh_limit,
     register_limit,
     update_profile_limit,
@@ -29,8 +30,10 @@ from app.auth.security import (
 from app.errors import error_response
 from app.extensions import db
 from app.models import AuthToken, User
+from app.services import ValidationError
 from app.services import account as account_service
 from app.services import devices as device_service
+from app.services import password_reset as password_reset_service
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/v1/auth")
 
@@ -71,6 +74,7 @@ def register():
     username = data.get("username")
     password = data.get("password")
     display_name = data.get("display_name")
+    email_raw = data.get("email")
 
     if not isinstance(username, str) or not username.strip():
         return error_response(422, "invalid_username", "username is required.")
@@ -79,6 +83,17 @@ def register():
     if not isinstance(display_name, str) or not display_name.strip():
         return error_response(422, "invalid_display_name", "display_name is required.")
 
+    # Email is optional. A blank/absent value stays null; a present value
+    # is validated and must be unique across accounts.
+    email: str | None = None
+    if email_raw is not None and not (isinstance(email_raw, str) and not email_raw.strip()):
+        try:
+            email = password_reset_service.clean_email(email_raw)
+        except ValidationError as exc:
+            return error_response(422, exc.code, exc.message)
+        if _email_in_use(email):
+            return error_response(409, "email_taken", "Email is already in use.")
+
     username = username.strip()
     display_name = display_name.strip()
 
@@ -86,6 +101,7 @@ def register():
         username=username,
         password_hash=hash_password(password),
         display_name=display_name,
+        email=email,
     )
     db.session.add(user)
     try:
@@ -95,6 +111,13 @@ def register():
         return error_response(409, "username_taken", "Username is already taken.")
 
     return user.to_public_dict(), 201
+
+
+def _email_in_use(email: str, *, exclude_user_id: int | None = None) -> bool:
+    stmt = select(User.id).where(User.email == email)
+    if exclude_user_id is not None:
+        stmt = stmt.where(User.id != exclude_user_id)
+    return db.session.execute(stmt).first() is not None
 
 
 @auth_bp.post("/login")
@@ -185,8 +208,24 @@ def update_profile():
             return error_response(422, "invalid_display_name", "display_name cannot be empty.")
         g.current_user.display_name = display_name.strip()
 
+    # ``email`` is settable and clearable: an explicit null or blank
+    # string removes the recovery address; a present value is validated
+    # and must not collide with another account.
+    if "email" in data:
+        email_raw = data.get("email")
+        if email_raw is None or (isinstance(email_raw, str) and not email_raw.strip()):
+            g.current_user.email = None
+        else:
+            try:
+                email = password_reset_service.clean_email(email_raw)
+            except ValidationError as exc:
+                return error_response(422, exc.code, exc.message)
+            if _email_in_use(email, exclude_user_id=g.current_user.id):
+                return error_response(409, "email_taken", "Email is already in use.")
+            g.current_user.email = email
+
     db.session.commit()
-    return g.current_user.to_public_dict(), 200
+    return g.current_user.to_private_dict(), 200
 
 
 @auth_bp.get("/me/export")
@@ -263,6 +302,29 @@ def change_password():
         .values(revoked_at=datetime.now(UTC))
     )
     db.session.commit()
+    return "", 204
+
+
+@auth_bp.post("/password-reset/request")
+@password_reset_limit()
+def password_reset_request():
+    """Request a password-reset email. Always 204 — never reveals whether
+    the address is registered (see ADR-0002)."""
+    data = _json_body()
+    email = data.get("email") if isinstance(data, dict) else None
+    password_reset_service.request_reset(email)
+    return "", 204
+
+
+@auth_bp.post("/password-reset/confirm")
+@password_reset_limit()
+@translates_service_errors
+def password_reset_confirm():
+    """Consume a reset token and set a new password; ends all sessions."""
+    data = _json_body()
+    if data is None:
+        return error_response(400, "bad_request", "JSON body required.")
+    password_reset_service.confirm_reset(data.get("token"), data.get("new_password"))
     return "", 204
 
 
