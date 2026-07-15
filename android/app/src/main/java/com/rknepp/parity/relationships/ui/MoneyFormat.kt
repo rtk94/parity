@@ -25,6 +25,22 @@ fun formatCentsSigned(cents: Long, currencyCode: String): String {
     return "$sign${unsignedAmount(cents)} $currencyCode"
 }
 
+/**
+ * Human-readable file size for attachment rows, e.g. `840 B`, `12.3 KB`,
+ * `1.4 MB`. Uses binary (1024) steps and one decimal above bytes.
+ */
+fun formatBytes(bytes: Long): String {
+    if (bytes < 1024) return "$bytes B"
+    val units = listOf("KB", "MB", "GB")
+    var value = bytes.toDouble() / 1024
+    var unitIndex = 0
+    while (value >= 1024 && unitIndex < units.lastIndex) {
+        value /= 1024
+        unitIndex++
+    }
+    return "${"%.1f".format(value)} ${units[unitIndex]}"
+}
+
 private fun unsignedAmount(cents: Long): String {
     val abs = if (cents < 0) -cents else cents
     val major = abs / 100

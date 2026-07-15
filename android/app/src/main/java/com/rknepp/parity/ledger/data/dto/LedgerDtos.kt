@@ -113,3 +113,20 @@ data class CreateCommentRequest(
 data class CommentListResponse(
     val items: List<CommentDto>,
 )
+
+@Serializable
+data class AttachmentDto(
+    val id: Long,
+    val expense_id: Long,
+    val uploaded_by_user_id: Long,
+    val filename: String,
+    val content_type: String,
+    val size_bytes: Long,
+    val checksum_sha256: String,
+    val created_at: String,
+)
+
+@Serializable
+data class AttachmentListResponse(
+    val items: List<AttachmentDto>,
+)

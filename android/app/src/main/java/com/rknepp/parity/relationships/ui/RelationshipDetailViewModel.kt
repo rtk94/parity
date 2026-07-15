@@ -9,6 +9,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.rknepp.parity.ServiceLocator
 import com.rknepp.parity.home.data.MeRepository
 import com.rknepp.parity.ledger.data.LedgerRepository
+import com.rknepp.parity.ledger.data.dto.AttachmentDto
 import com.rknepp.parity.ledger.data.dto.CommentDto
 import com.rknepp.parity.network.ApiResult
 import com.rknepp.parity.relationships.data.RelationshipRepository
@@ -39,6 +40,44 @@ data class CommentRow(
     val dateText: String,
     val content: String,
 )
+
+/** An expense attachment (receipt) resolved for display. */
+data class AttachmentRow(
+    val id: Long,
+    val filename: String,
+    val sizeText: String,
+    val contentType: String,
+    /** Uploaded by the current user — controls delete visibility. */
+    val isMine: Boolean,
+    val isDownloading: Boolean = false,
+)
+
+/**
+ * A downloaded attachment handed to the UI to open in the system viewer.
+ * One-shot: the screen writes the bytes to cache, fires the view intent,
+ * then calls [RelationshipDetailViewModel.consumePendingOpen].
+ */
+data class OpenableAttachment(
+    val filename: String,
+    val contentType: String,
+    val bytes: ByteArray,
+) {
+    // ByteArray needs value-based equals/hashCode for StateFlow dedup.
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is OpenableAttachment) return false
+        return filename == other.filename &&
+            contentType == other.contentType &&
+            bytes.contentEquals(other.bytes)
+    }
+
+    override fun hashCode(): Int {
+        var result = filename.hashCode()
+        result = 31 * result + contentType.hashCode()
+        result = 31 * result + bytes.contentHashCode()
+        return result
+    }
+}
 
 data class LedgerRow(
     val id: Long,
@@ -71,6 +110,11 @@ data class LedgerRow(
     val isLoadingComments: Boolean = false,
     val commentDraft: String = "",
     val isPostingComment: Boolean = false,
+    // Attachments (expense-only). Null when the section is collapsed /
+    // not yet loaded; an empty list means loaded-but-none.
+    val attachments: List<AttachmentRow>? = null,
+    val isLoadingAttachments: Boolean = false,
+    val isUploadingAttachment: Boolean = false,
 )
 
 data class RelationshipDetailData(
@@ -104,6 +148,10 @@ class RelationshipDetailViewModel(
     /** One-shot user-facing error for entry actions, shown in a snackbar. */
     private val _actionError = MutableStateFlow<String?>(null)
     val actionError: StateFlow<String?> = _actionError.asStateFlow()
+
+    /** One-shot: a downloaded attachment for the UI to open in a viewer. */
+    private val _pendingOpen = MutableStateFlow<OpenableAttachment?>(null)
+    val pendingOpen: StateFlow<OpenableAttachment?> = _pendingOpen.asStateFlow()
 
     private var myId: Long = -1
     private var loadInFlight = false
@@ -412,6 +460,123 @@ class RelationshipDetailViewModel(
             dateText = formatIsoDate(created_at),
             content = content,
         )
+    }
+
+    // --- Attachments (expense-only) -------------------------------------
+
+    fun toggleAttachments(expenseId: Long) {
+        val loaded = _state.value as? RelationshipDetailState.Loaded ?: return
+        val item = loaded.data.ledgerItems.find { it.id == expenseId && it.type == "expense" } ?: return
+
+        if (item.attachments != null) {
+            updateItem(expenseId, "expense") { it.copy(attachments = null) }
+        } else {
+            updateItem(expenseId, "expense") { it.copy(isLoadingAttachments = true) }
+            viewModelScope.launch {
+                when (val res = ledgerRepository.listAttachments(expenseId)) {
+                    is ApiResult.Success -> {
+                        val rows = res.data.items.map { it.toRow() }
+                        updateItem(expenseId, "expense") {
+                            it.copy(isLoadingAttachments = false, attachments = rows)
+                        }
+                    }
+                    else -> {
+                        updateItem(expenseId, "expense") { it.copy(isLoadingAttachments = false) }
+                        _actionError.update { "Could not load attachments. Try again." }
+                    }
+                }
+            }
+        }
+    }
+
+    fun uploadAttachment(
+        expenseId: Long,
+        filename: String,
+        contentType: String,
+        bytes: ByteArray,
+    ) {
+        val loaded = _state.value as? RelationshipDetailState.Loaded ?: return
+        val item = loaded.data.ledgerItems.find { it.id == expenseId && it.type == "expense" } ?: return
+        if (item.isUploadingAttachment) return
+
+        updateItem(expenseId, "expense") { it.copy(isUploadingAttachment = true) }
+        viewModelScope.launch {
+            when (val res = ledgerRepository.uploadAttachment(expenseId, filename, contentType, bytes)) {
+                is ApiResult.Success -> updateItem(expenseId, "expense") {
+                    it.copy(
+                        isUploadingAttachment = false,
+                        // Reveal the section and append the new row locally.
+                        attachments = (it.attachments ?: emptyList()) + res.data.toRow(),
+                    )
+                }
+                is ApiResult.HttpFailure -> {
+                    updateItem(expenseId, "expense") { it.copy(isUploadingAttachment = false) }
+                    _actionError.update {
+                        res.error?.message ?: "Could not upload the attachment. Try again."
+                    }
+                }
+                else -> {
+                    updateItem(expenseId, "expense") { it.copy(isUploadingAttachment = false) }
+                    _actionError.update { "Could not upload the attachment. Check your connection." }
+                }
+            }
+        }
+    }
+
+    fun openAttachment(expenseId: Long, attachment: AttachmentRow) {
+        if (attachment.isDownloading) return
+        updateAttachment(expenseId, attachment.id) { it.copy(isDownloading = true) }
+        viewModelScope.launch {
+            when (val res = ledgerRepository.downloadAttachment(attachment.id)) {
+                is ApiResult.Success -> {
+                    updateAttachment(expenseId, attachment.id) { it.copy(isDownloading = false) }
+                    _pendingOpen.update {
+                        OpenableAttachment(attachment.filename, attachment.contentType, res.data)
+                    }
+                }
+                else -> {
+                    updateAttachment(expenseId, attachment.id) { it.copy(isDownloading = false) }
+                    _actionError.update { "Could not open the attachment. Try again." }
+                }
+            }
+        }
+    }
+
+    fun deleteAttachment(expenseId: Long, attachmentId: Long) {
+        viewModelScope.launch {
+            when (ledgerRepository.deleteAttachment(attachmentId)) {
+                is ApiResult.Success -> updateItem(expenseId, "expense") { row ->
+                    row.copy(attachments = row.attachments?.filterNot { it.id == attachmentId })
+                }
+                else -> _actionError.update { "Could not delete the attachment. Try again." }
+            }
+        }
+    }
+
+    fun consumePendingOpen() {
+        _pendingOpen.update { null }
+    }
+
+    private fun AttachmentDto.toRow(): AttachmentRow = AttachmentRow(
+        id = id,
+        filename = filename,
+        sizeText = formatBytes(size_bytes),
+        contentType = content_type,
+        isMine = uploaded_by_user_id == myId,
+    )
+
+    private fun updateAttachment(
+        expenseId: Long,
+        attachmentId: Long,
+        updater: (AttachmentRow) -> AttachmentRow,
+    ) {
+        updateItem(expenseId, "expense") { row ->
+            row.copy(
+                attachments = row.attachments?.map {
+                    if (it.id == attachmentId) updater(it) else it
+                },
+            )
+        }
     }
 
     private fun updateItem(id: Long, type: String, updater: (LedgerRow) -> LedgerRow) {
