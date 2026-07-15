@@ -35,6 +35,7 @@ class Config:
     RATELIMIT_CHANGE_PASSWORD: str = os.environ.get("RATELIMIT_CHANGE_PASSWORD", "5 per hour")
     RATELIMIT_UPDATE_PROFILE: str = os.environ.get("RATELIMIT_UPDATE_PROFILE", "10 per hour")
     RATELIMIT_REFRESH: str = os.environ.get("RATELIMIT_REFRESH", "10 per hour")
+    RATELIMIT_PASSWORD_RESET: str = os.environ.get("RATELIMIT_PASSWORD_RESET", "5 per hour")
 
     # Bearer token lifetimes. Idle is sliding from ``last_used_at``;
     # absolute is a hard cap from ``created_at``.
@@ -46,6 +47,23 @@ class Config:
     # and a no-op sender is used (dev, tests, or any instance without
     # credentials). Each environment (prod/staging) points at its own file.
     FCM_CREDENTIALS_FILE: str | None = os.environ.get("FCM_CREDENTIALS_FILE") or None
+
+    # Outbound email (password reset — see ADR-0002). Provider-agnostic
+    # SMTP: point MAIL_SERVER at any relay (SES, Postmark, …). Unset ->
+    # email is disabled and a no-op sender is used (dev, tests, or any
+    # instance without mail configured).
+    MAIL_SERVER: str | None = os.environ.get("MAIL_SERVER") or None
+    MAIL_PORT: int = int(os.environ.get("MAIL_PORT", "587"))
+    MAIL_USERNAME: str | None = os.environ.get("MAIL_USERNAME") or None
+    MAIL_PASSWORD: str | None = os.environ.get("MAIL_PASSWORD") or None
+    MAIL_USE_TLS: bool = os.environ.get("MAIL_USE_TLS", "true").lower() in {"1", "true", "yes"}
+    MAIL_FROM: str = os.environ.get("MAIL_FROM", "no-reply@parity.local")
+    # Base URL the client uses to complete a reset; the raw token is
+    # appended. Shown in the reset email.
+    PASSWORD_RESET_URL_BASE: str | None = os.environ.get("PASSWORD_RESET_URL_BASE") or None
+    PASSWORD_RESET_LIFETIME_MINUTES: int = int(
+        os.environ.get("PASSWORD_RESET_LIFETIME_MINUTES", "60")
+    )
 
 
 class DevelopmentConfig(Config):

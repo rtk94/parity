@@ -30,6 +30,7 @@ from app.models import (
     Comment,
     DeviceToken,
     Expense,
+    PasswordResetToken,
     Payment,
     Relationship,
     User,
@@ -74,6 +75,7 @@ def export_data(user: User) -> dict[str, Any]:
             "id": user.id,
             "username": user.username,
             "display_name": user.display_name,
+            "email": user.email,
             "created_at": iso8601_z(user.created_at),
         },
         "relationships": [serialize_relationship(r) for r in relationships],
@@ -88,6 +90,9 @@ def delete_account(user: User) -> None:
     now = datetime.now(UTC)
     user.username = f"deleted_user_{user.id}"
     user.display_name = "Deleted user"
+    # Email is personal data; drop it so the freed address can be reused
+    # and nothing lingers on the tombstone.
+    user.email = None
     # A fresh random hash so the account can never be logged into again.
     user.password_hash = hash_password(secrets.token_urlsafe(32))
     user.is_admin = False
@@ -100,3 +105,5 @@ def delete_account(user: User) -> None:
     # Push tokens are personal data and useless once the account is dead;
     # remove them outright rather than leave them pointing at a tombstone.
     db.session.execute(delete(DeviceToken).where(DeviceToken.user_id == user.id))
+    # Any outstanding reset tokens must not survive the account.
+    db.session.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id))

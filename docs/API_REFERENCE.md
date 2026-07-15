@@ -6,13 +6,18 @@ Parity exposes a RESTful API over HTTPS. All endpoints (except health, auth/logi
 - `GET /api/v1/health`: Liveness check (no auth).
 
 ## Authentication
-- `POST /api/v1/auth/register`: Register a new user.
+- `POST /api/v1/auth/register`: Register a new user. Accepts an optional `email` (used only for password recovery; unique across accounts).
 - `POST /api/v1/auth/login`: Authenticate and receive a token.
 - `POST /api/v1/auth/logout`: Revoke current token.
-- `GET /api/v1/auth/me`: Get the signed-in user.
-- `PATCH /api/v1/auth/me`: Update the signed-in user's `display_name`.
+- `GET /api/v1/auth/me`: Get the signed-in user (self-view includes `is_admin` and `email`).
+- `PATCH /api/v1/auth/me`: Update the signed-in user's `display_name` and/or `email` (a null/blank `email` clears it). Returns the self-view.
 - `POST /api/v1/auth/change-password`: Change password; revokes all other sessions.
 - `POST /api/v1/auth/refresh`: Exchange the current token for a fresh one.
+
+### Password reset
+A recovery email must be on file (see `email` above). Email delivery is transport-agnostic and off until SMTP is configured (see [ADR-0002](adr/0002-password-reset-transport.md)); until then requests succeed but deliver nothing.
+- `POST /api/v1/auth/password-reset/request`: Body `{email}`. Always returns `204` — it never reveals whether an address is registered. If a live account owns the address, a single-use, short-lived reset token is emailed.
+- `POST /api/v1/auth/password-reset/confirm`: Body `{token, new_password}`. Sets the new password on a valid, unexpired, unused token and **revokes every session** for that account. Errors: `invalid_token`, `weak_password`.
 
 ## Relationships
 - `GET /api/v1/relationships`: List all relationships.

@@ -41,11 +41,18 @@ endpoints on both entry types, and the `comment` table (migration
 `2748f2e00746_add_comment_table`). Landed in commit `f7f49ba`; closes
 issue #13.
 
-### Password reset / forgot-password flow
+### Password reset / forgot-password flow — shipped (backend)
 
-Currently a forgotten password is unrecoverable without server-side DB
-access. A reset flow would require an email or recovery channel that
-does not exist yet. Deferred from Phase 4. (Issue #7.)
+Self-service email-based password reset (see
+[ADR-0002](docs/adr/0002-password-reset-transport.md)). Accounts gained
+an optional, unique `email` (settable at registration and via
+`PATCH /me`, never shown to the counterparty); a transport-agnostic,
+config-gated SMTP sender (`app/services/email_sender.py`, no-op until
+`MAIL_SERVER` is set, mirroring the FCM push sender); a hashed,
+single-use `password_reset_token`; and `POST
+/auth/password-reset/request` (enumeration-resistant, always `204`) +
+`/confirm` (sets the new password and revokes all sessions). Closes
+issue #7 on the backend. The Android forgot-password UI is a follow-up.
 
 ### Recurring expenses — shipped
 
