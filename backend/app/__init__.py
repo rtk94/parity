@@ -65,6 +65,11 @@ def create_app(
 
     app.extensions["push_sender"] = build_push_sender(app.config)
 
+    # Email sender: a no-op unless MAIL_SERVER is configured.
+    from app.services.email_sender import build_email_sender
+
+    app.extensions["email_sender"] = build_email_sender(app.config)
+
     # Import models so SQLAlchemy + Alembic see them.
     from app import models  # noqa: F401
     from app.api import (
