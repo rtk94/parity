@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- Downloaded attachments staged for the system viewer live under
+         cacheDir/attachments/ (see writeToCache in RelationshipDetailScreen). -->
+    <cache-path
+        name="attachments"
+        path="attachments/" />
+</paths>

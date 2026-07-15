@@ -93,6 +93,12 @@ class RelationshipDetailViewModelTest {
         override suspend fun createPaymentComment(id: Long, request: com.rknepp.parity.ledger.data.dto.CreateCommentRequest): Response<com.rknepp.parity.ledger.data.dto.CommentDto> {
             return Response.success(com.rknepp.parity.ledger.data.dto.CommentDto(2L, 1L, null, id, request.content, "2024-01-01T00:00:00Z"))
         }
+        override suspend fun listAttachments(id: Long): Response<com.rknepp.parity.ledger.data.dto.AttachmentListResponse> {
+            return Response.success(com.rknepp.parity.ledger.data.dto.AttachmentListResponse(emptyList()))
+        }
+        override suspend fun uploadAttachment(id: Long, file: okhttp3.MultipartBody.Part) = error("unused")
+        override suspend fun downloadAttachment(id: Long) = error("unused")
+        override suspend fun deleteAttachment(id: Long) = error("unused")
     }
 
     private val meRepo = MeRepository { fakeAuthApi }

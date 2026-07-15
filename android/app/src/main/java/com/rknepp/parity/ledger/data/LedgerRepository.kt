@@ -8,8 +8,17 @@ import com.rknepp.parity.ledger.data.dto.ExpenseListResponse
 import com.rknepp.parity.ledger.data.dto.PaymentDto
 import com.rknepp.parity.ledger.data.dto.PaymentListResponse
 import com.rknepp.parity.ledger.data.dto.PendingResponse
+import com.rknepp.parity.ledger.data.dto.AttachmentDto
+import com.rknepp.parity.ledger.data.dto.AttachmentListResponse
 import com.rknepp.parity.network.ApiResult
 import com.rknepp.parity.network.apiCall
+import com.rknepp.parity.network.apiCallUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.IOException
 
 class LedgerRepository(
     private val apiProvider: () -> LedgerApi,
@@ -72,5 +81,46 @@ class LedgerRepository(
 
     suspend fun createPaymentComment(id: Long, content: String): ApiResult<com.rknepp.parity.ledger.data.dto.CommentDto> = apiCall {
         apiProvider().createPaymentComment(id, com.rknepp.parity.ledger.data.dto.CreateCommentRequest(content))
+    }
+
+    // --- Attachments (expense receipts) ---------------------------------
+
+    suspend fun listAttachments(expenseId: Long): ApiResult<AttachmentListResponse> = apiCall {
+        apiProvider().listAttachments(expenseId)
+    }
+
+    suspend fun uploadAttachment(
+        expenseId: Long,
+        filename: String,
+        contentType: String,
+        bytes: ByteArray,
+    ): ApiResult<AttachmentDto> = apiCall {
+        val body = bytes.toRequestBody(contentType.toMediaTypeOrNull(), 0, bytes.size)
+        val part = MultipartBody.Part.createFormData("file", filename, body)
+        apiProvider().uploadAttachment(expenseId, part)
+    }
+
+    /**
+     * Downloads an attachment's raw bytes. The response body is read fully
+     * on the IO dispatcher (attachments are capped at 10 MB server-side).
+     */
+    suspend fun downloadAttachment(id: Long): ApiResult<ByteArray> =
+        when (val result = apiCall { apiProvider().downloadAttachment(id) }) {
+            is ApiResult.Success -> withContext(Dispatchers.IO) {
+                try {
+                    ApiResult.Success(result.data.bytes())
+                } catch (io: IOException) {
+                    ApiResult.NetworkFailure(io)
+                } finally {
+                    result.data.close()
+                }
+            }
+            is ApiResult.HttpFailure -> result
+            is ApiResult.NetworkFailure -> result
+            is ApiResult.UnexpectedFailure -> result
+        }
+
+    suspend fun deleteAttachment(id: Long): ApiResult<Unit> = apiCallUnit {
+        apiProvider().deleteAttachment(id)
     }
 }
