@@ -4,6 +4,7 @@ from __future__ import annotations
 
 # Imported for the after_create event listener side effect; do not remove.
 from app.models import _triggers  # noqa: F401
+from app.models.attachment import Attachment
 from app.models.audit import AuditLog
 from app.models.auth_token import AuthToken
 from app.models.comment import Comment
@@ -18,6 +19,7 @@ from app.models.relationship import Relationship, RelationshipStatus
 from app.models.user import User
 
 __all__ = [
+    "Attachment",
     "AuditLog",
     "AuthToken",
     "Comment",
