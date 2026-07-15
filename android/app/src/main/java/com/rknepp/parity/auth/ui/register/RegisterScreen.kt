@@ -29,6 +29,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -100,6 +101,21 @@ fun RegisterScreen(
                 supportingText = { Text(stringResource(R.string.register_display_name_helper)) },
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
+                    imeAction = ImeAction.Next,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = state.email,
+                onValueChange = vm::onEmailChange,
+                label = { Text(stringResource(R.string.register_email_label)) },
+                singleLine = true,
+                enabled = !state.submitting,
+                supportingText = { Text(stringResource(R.string.register_email_helper)) },
+                keyboardOptions = KeyboardOptions(
+                    capitalization = KeyboardCapitalization.None,
+                    autoCorrect = false,
+                    keyboardType = KeyboardType.Email,
                     imeAction = ImeAction.Next,
                 ),
                 modifier = Modifier.fillMaxWidth(),

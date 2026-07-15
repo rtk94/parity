@@ -61,6 +61,7 @@ fun SettingsScreen() {
     val state by vm.state.collectAsState()
 
     var displayNameInput by remember { mutableStateOf("") }
+    var emailInput by remember { mutableStateOf("") }
     var currentPasswordInput by remember { mutableStateOf("") }
     var newPasswordInput by remember { mutableStateOf("") }
     var showLogoutConfirm by remember { mutableStateOf(false) }
@@ -101,10 +102,15 @@ fun SettingsScreen() {
         }
     }
 
-    // Sync the loaded profile into the edit field once.
+    // Sync the loaded profile into the edit fields once.
     LaunchedEffect(state.displayName) {
         if (displayNameInput.isEmpty() && state.displayName.isNotEmpty()) {
             displayNameInput = state.displayName
+        }
+    }
+    LaunchedEffect(state.email) {
+        if (emailInput.isEmpty() && state.email.isNotEmpty()) {
+            emailInput = state.email
         }
     }
 
@@ -215,6 +221,19 @@ fun SettingsScreen() {
                     singleLine = true,
                     enabled = !state.isSavingProfile,
                 )
+                OutlinedTextField(
+                    value = emailInput,
+                    onValueChange = { emailInput = it },
+                    label = { Text("Email") },
+                    supportingText = { Text("For password resets. Leave blank to remove.") },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    enabled = !state.isSavingProfile,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Email,
+                        imeAction = ImeAction.Done,
+                    ),
+                )
                 if (state.profileError != null) {
                     Text(
                         text = state.profileError!!,
@@ -223,10 +242,13 @@ fun SettingsScreen() {
                     )
                 }
                 Button(
-                    onClick = { vm.updateProfile(displayNameInput) },
+                    onClick = { vm.updateProfile(displayNameInput, emailInput) },
                     enabled = !state.isSavingProfile &&
                         displayNameInput.isNotBlank() &&
-                        displayNameInput.trim() != state.displayName,
+                        (
+                            displayNameInput.trim() != state.displayName ||
+                                emailInput.trim() != state.email
+                            ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(52.dp),

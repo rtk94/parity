@@ -45,6 +45,7 @@ fun LoginScreen(
     onSessionExpiredConsumed: () -> Unit,
     onLoggedIn: () -> Unit,
     onNavigateToRegister: () -> Unit,
+    onNavigateToForgotPassword: () -> Unit,
     prefillUsername: String = "",
 ) {
     val locator = LocalServiceLocator.current
@@ -172,6 +173,14 @@ fun LoginScreen(
                         style = MaterialTheme.typography.labelLarge,
                     )
                 }
+            }
+
+            TextButton(
+                onClick = onNavigateToForgotPassword,
+                enabled = !state.submitting,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(stringResource(R.string.login_forgot_password_link))
             }
 
             TextButton(
