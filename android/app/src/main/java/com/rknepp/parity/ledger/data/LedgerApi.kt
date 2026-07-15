@@ -8,10 +8,15 @@ import com.rknepp.parity.ledger.data.dto.ExpenseListResponse
 import com.rknepp.parity.ledger.data.dto.PaymentDto
 import com.rknepp.parity.ledger.data.dto.PaymentListResponse
 import com.rknepp.parity.ledger.data.dto.PendingResponse
+import okhttp3.MultipartBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Multipart
 import retrofit2.http.POST
+import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 
@@ -68,4 +73,19 @@ interface LedgerApi {
 
     @POST("api/v1/payments/{id}/comments")
     suspend fun createPaymentComment(@Path("id") id: Long, @Body request: com.rknepp.parity.ledger.data.dto.CreateCommentRequest): Response<com.rknepp.parity.ledger.data.dto.CommentDto>
+
+    // Attachments are expense-only (receipts). The upload field name must
+    // be "file" to match the backend's multipart handler.
+    @GET("api/v1/expenses/{id}/attachments")
+    suspend fun listAttachments(@Path("id") id: Long): Response<com.rknepp.parity.ledger.data.dto.AttachmentListResponse>
+
+    @Multipart
+    @POST("api/v1/expenses/{id}/attachments")
+    suspend fun uploadAttachment(@Path("id") id: Long, @Part file: MultipartBody.Part): Response<com.rknepp.parity.ledger.data.dto.AttachmentDto>
+
+    @GET("api/v1/attachments/{id}")
+    suspend fun downloadAttachment(@Path("id") id: Long): Response<ResponseBody>
+
+    @DELETE("api/v1/attachments/{id}")
+    suspend fun deleteAttachment(@Path("id") id: Long): Response<Unit>
 }

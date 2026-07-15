@@ -1,5 +1,11 @@
 package com.rknepp.parity.relationships.ui
 
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.OpenableColumns
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -35,12 +42,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.rknepp.parity.app.LocalServiceLocator
@@ -50,12 +60,17 @@ import com.rknepp.parity.ui.components.LoadingState
 import com.rknepp.parity.ui.theme.ParityMoney
 import com.rknepp.parity.ui.theme.ParityThemeDefaults
 import com.rknepp.parity.ui.theme.PillShape
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /** Destructive/consequential actions gated behind a confirm dialog. */
 private sealed interface PendingAction {
     data object RejectInvite : PendingAction
     data class Discard(val row: LedgerRow) : PendingAction
     data class Reverse(val row: LedgerRow) : PendingAction
+    data class DeleteAttachment(val expenseId: Long, val attachment: AttachmentRow) : PendingAction
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -72,9 +87,53 @@ fun RelationshipDetailScreen(
     )
     val state by vm.state.collectAsState()
     val actionError by vm.actionError.collectAsState()
+    val pendingOpen by vm.pendingOpen.collectAsState()
 
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
     var pendingAction by remember { mutableStateOf<PendingAction?>(null) }
+
+    // The expense a picked file will attach to. Set just before launching
+    // the picker; consumed when the picker returns.
+    var uploadTargetExpenseId by remember { mutableStateOf<Long?>(null) }
+    val pickFileLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        val target = uploadTargetExpenseId
+        uploadTargetExpenseId = null
+        if (uri != null && target != null) {
+            scope.launch {
+                val picked = readPickedFile(context, uri)
+                if (picked == null) {
+                    snackbarHostState.showSnackbar("Could not read that file.")
+                } else {
+                    vm.uploadAttachment(target, picked.filename, picked.contentType, picked.bytes)
+                }
+            }
+        }
+    }
+
+    // A downloaded attachment: write it to cache and hand it to the
+    // system viewer, then clear the one-shot.
+    LaunchedEffect(pendingOpen) {
+        val file = pendingOpen ?: return@LaunchedEffect
+        val uri = withContext(Dispatchers.IO) {
+            runCatching { writeToCache(context, file.filename, file.bytes) }.getOrNull()
+        }
+        val opened = uri != null && runCatching {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, file.contentType)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                },
+            )
+        }.isSuccess
+        if (!opened) {
+            snackbarHostState.showSnackbar("No app can open ${file.filename}.")
+        }
+        vm.consumePendingOpen()
+    }
 
     // Revalidate when returning from the create-expense / create-
     // payment screens so new entries appear without a manual reload.
@@ -138,6 +197,17 @@ fun RelationshipDetailScreen(
                 },
                 onDismiss = { pendingAction = null },
             )
+            is PendingAction.DeleteAttachment -> ConfirmActionDialog(
+                title = "Delete this attachment?",
+                text = "“${action.attachment.filename}” will be permanently removed.",
+                confirmLabel = "Delete",
+                destructive = true,
+                onConfirm = {
+                    vm.deleteAttachment(action.expenseId, action.attachment.id)
+                    pendingAction = null
+                },
+                onDismiss = { pendingAction = null },
+            )
         }
     }
 
@@ -194,6 +264,15 @@ fun RelationshipDetailScreen(
                             vm.updateCommentDraft(row.id, row.type, draft)
                         },
                         onPostComment = { row -> vm.postComment(row.id, row.type) },
+                        onToggleAttachments = { row -> vm.toggleAttachments(row.id) },
+                        onAddAttachment = { row ->
+                            uploadTargetExpenseId = row.id
+                            pickFileLauncher.launch(arrayOf("image/*", "application/pdf"))
+                        },
+                        onOpenAttachment = { row, att -> vm.openAttachment(row.id, att) },
+                        onDeleteAttachment = { row, att ->
+                            pendingAction = PendingAction.DeleteAttachment(row.id, att)
+                        },
                     )
                 }
             }
@@ -214,6 +293,10 @@ private fun RelationshipDetailContent(
     onToggleComments: (LedgerRow) -> Unit,
     onCommentDraftChange: (LedgerRow, String) -> Unit,
     onPostComment: (LedgerRow) -> Unit,
+    onToggleAttachments: (LedgerRow) -> Unit,
+    onAddAttachment: (LedgerRow) -> Unit,
+    onOpenAttachment: (LedgerRow, AttachmentRow) -> Unit,
+    onDeleteAttachment: (LedgerRow, AttachmentRow) -> Unit,
 ) {
     val pending = data.ledgerItems.filter { it.status == "pending" }
     val history = data.ledgerItems.filter { it.status != "pending" }
@@ -262,6 +345,10 @@ private fun RelationshipDetailContent(
                     onToggleComments = onToggleComments,
                     onCommentDraftChange = onCommentDraftChange,
                     onPostComment = onPostComment,
+                    onToggleAttachments = onToggleAttachments,
+                    onAddAttachment = onAddAttachment,
+                    onOpenAttachment = onOpenAttachment,
+                    onDeleteAttachment = onDeleteAttachment,
                 )
             }
         }
@@ -278,6 +365,10 @@ private fun RelationshipDetailContent(
                     onToggleComments = onToggleComments,
                     onCommentDraftChange = onCommentDraftChange,
                     onPostComment = onPostComment,
+                    onToggleAttachments = onToggleAttachments,
+                    onAddAttachment = onAddAttachment,
+                    onOpenAttachment = onOpenAttachment,
+                    onDeleteAttachment = onDeleteAttachment,
                 )
             }
         }
@@ -397,6 +488,10 @@ private fun LedgerGroup(
     onToggleComments: (LedgerRow) -> Unit,
     onCommentDraftChange: (LedgerRow, String) -> Unit,
     onPostComment: (LedgerRow) -> Unit,
+    onToggleAttachments: (LedgerRow) -> Unit,
+    onAddAttachment: (LedgerRow) -> Unit,
+    onOpenAttachment: (LedgerRow, AttachmentRow) -> Unit,
+    onDeleteAttachment: (LedgerRow, AttachmentRow) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
         LabelCaps(header, headerColor)
@@ -412,6 +507,10 @@ private fun LedgerGroup(
                 onToggleComments = { onToggleComments(item) },
                 onCommentDraftChange = { draft -> onCommentDraftChange(item, draft) },
                 onPostComment = { onPostComment(item) },
+                onToggleAttachments = { onToggleAttachments(item) },
+                onAddAttachment = { onAddAttachment(item) },
+                onOpenAttachment = { att -> onOpenAttachment(item, att) },
+                onDeleteAttachment = { att -> onDeleteAttachment(item, att) },
             )
         }
     }
@@ -426,6 +525,10 @@ private fun LedgerEntry(
     onToggleComments: () -> Unit,
     onCommentDraftChange: (String) -> Unit,
     onPostComment: () -> Unit,
+    onToggleAttachments: () -> Unit,
+    onAddAttachment: () -> Unit,
+    onOpenAttachment: (AttachmentRow) -> Unit,
+    onDeleteAttachment: (AttachmentRow) -> Unit,
 ) {
     val inactive = item.status == "discarded"
     Column(
@@ -485,6 +588,16 @@ private fun LedgerEntry(
                     onToggleComments,
                 ),
             )
+            // Attachments are receipts on expenses only.
+            if (item.type == "expense") {
+                add(
+                    Triple(
+                        if (item.attachments != null) "Hide files" else "Files",
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                        onToggleAttachments,
+                    ),
+                )
+            }
         }
         Row(
             modifier = Modifier.padding(top = 8.dp),
@@ -504,6 +617,22 @@ private fun LedgerEntry(
             )
         } else if (item.comments != null) {
             CommentsSection(item = item, onDraftChange = onCommentDraftChange, onPost = onPostComment)
+        }
+
+        if (item.isLoadingAttachments) {
+            CircularProgressIndicator(
+                modifier = Modifier
+                    .padding(top = 8.dp)
+                    .size(20.dp),
+                strokeWidth = 2.dp,
+            )
+        } else if (item.attachments != null) {
+            AttachmentsSection(
+                item = item,
+                onAdd = onAddAttachment,
+                onOpen = onOpenAttachment,
+                onDelete = onDeleteAttachment,
+            )
         }
     }
 }
@@ -647,4 +776,135 @@ private fun CommentsSection(
             }
         }
     }
+}
+
+@Composable
+private fun AttachmentsSection(
+    item: LedgerRow,
+    onAdd: () -> Unit,
+    onOpen: (AttachmentRow) -> Unit,
+    onDelete: (AttachmentRow) -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp),
+    ) {
+        HorizontalDivider(
+            color = MaterialTheme.colorScheme.outlineVariant,
+            modifier = Modifier.padding(bottom = 8.dp),
+        )
+        if (item.attachments.isNullOrEmpty()) {
+            Text(
+                "No attachments yet.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        } else {
+            item.attachments.forEach { att ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .clickable { onOpen(att) }
+                            .padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            att.filename,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                        Text(
+                            att.sizeText,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    if (att.isDownloading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(20.dp),
+                            strokeWidth = 2.dp,
+                        )
+                    }
+                    if (att.isMine) {
+                        IconButton(onClick = { onDelete(att) }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = "Delete attachment",
+                                tint = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        Row(
+            modifier = Modifier.padding(top = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (item.isUploadingAttachment) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                Text(
+                    "Uploading…",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            } else {
+                TextAction("Add file", MaterialTheme.colorScheme.tertiary, bold = true, onClick = onAdd)
+            }
+        }
+    }
+}
+
+/** A file the user picked, resolved to what the upload endpoint needs. */
+private data class PickedFile(
+    val filename: String,
+    val contentType: String,
+    val bytes: ByteArray,
+)
+
+/**
+ * Resolve a picked content [Uri] to its bytes, display name, and MIME
+ * type. Runs off the main thread; returns null if the file can't be read.
+ */
+private suspend fun readPickedFile(context: Context, uri: Uri): PickedFile? =
+    withContext(Dispatchers.IO) {
+        try {
+            val resolver = context.contentResolver
+            val mime = resolver.getType(uri) ?: "application/octet-stream"
+            var name = "attachment"
+            resolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { c ->
+                if (c.moveToFirst()) {
+                    val idx = c.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (idx >= 0) c.getString(idx)?.let { name = it }
+                }
+            }
+            val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+                ?: return@withContext null
+            PickedFile(name, mime, bytes)
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+/**
+ * Write attachment bytes to a private cache file and return a
+ * FileProvider content URI a viewer app can read. Runs off the main
+ * thread (callers wrap in the IO dispatcher).
+ */
+private fun writeToCache(context: Context, filename: String, bytes: ByteArray): Uri {
+    val dir = File(context.cacheDir, "attachments").apply { mkdirs() }
+    // Sanitize: keep only the leaf name so a crafted filename can't escape.
+    val safeName = File(filename).name.ifBlank { "attachment" }
+    val outFile = File(dir, safeName)
+    outFile.writeBytes(bytes)
+    return FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", outFile)
 }
