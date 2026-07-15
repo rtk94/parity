@@ -30,6 +30,8 @@
     <string name="register_password_helper">At least 8 characters</string>
     <string name="register_display_name_label">Display name</string>
     <string name="register_display_name_helper">Shown to people you share a ledger with</string>
+    <string name="register_email_label">Email (optional)</string>
+    <string name="register_email_helper">Used only for password resets. You can add it later.</string>
     <string name="register_button">Register</string>
     <string name="register_back_to_login">Back to sign in</string>
     <string name="register_error_username_taken">Username already taken.</string>

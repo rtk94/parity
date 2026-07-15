@@ -114,6 +114,43 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun registerWithEmailIncludesEmailInBody() = runBlocking {
+        server.enqueue(jsonResponse(201, """{"id":8,"username":"dave","display_name":"Dave"}"""))
+
+        val result = repo.register("dave", "pw", "Dave", "dave@example.com")
+
+        assertTrue(result is ApiResult.Success)
+        val sent = server.takeRequest().body.readUtf8()
+        assertTrue(sent.contains("\"email\":\"dave@example.com\""))
+    }
+
+    @Test
+    fun registerWithoutEmailOmitsEmailFromBody() = runBlocking {
+        server.enqueue(jsonResponse(201, """{"id":9,"username":"erin","display_name":"Erin"}"""))
+
+        // No email argument -> null -> omitted from JSON (explicitNulls =
+        // false), so the backend treats it as "no recovery address".
+        val result = repo.register("erin", "pw", "Erin")
+
+        assertTrue(result is ApiResult.Success)
+        val sent = server.takeRequest().body.readUtf8()
+        assertTrue("email must be absent, was: $sent", !sent.contains("email"))
+    }
+
+    @Test
+    fun registerEmailConflictSurfacesParsedFailure() = runBlocking {
+        val body = """{"error":{"code":"email_taken","message":"Email is already in use."}}"""
+        server.enqueue(jsonResponse(409, body))
+
+        val result = repo.register("frank", "pw", "Frank", "taken@example.com")
+
+        assertTrue(result is ApiResult.HttpFailure)
+        val fail = result as ApiResult.HttpFailure
+        assertEquals(409, fail.code)
+        assertEquals("email_taken", fail.error?.code)
+    }
+
+    @Test
     fun registerConflictReturnsParsedUsernameTaken() = runBlocking {
         val body = """
             {"error":{"code":"username_taken","message":"Username is already taken."}}

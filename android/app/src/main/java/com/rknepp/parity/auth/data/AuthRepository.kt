@@ -30,8 +30,9 @@ class AuthRepository(
         username: String,
         password: String,
         displayName: String,
+        email: String? = null,
     ): ApiResult<UserSummary> = apiCall {
-        authApiProvider().register(RegisterRequest(username, password, displayName))
+        authApiProvider().register(RegisterRequest(username, password, displayName, email))
     }
 
     suspend fun login(username: String, password: String): ApiResult<UserSummary> =
