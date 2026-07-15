@@ -37,3 +37,14 @@ data class ChangePasswordRequest(
 data class DeleteAccountRequest(
     val password: String,
 )
+
+@Serializable
+data class PasswordResetRequestBody(
+    val email: String,
+)
+
+@Serializable
+data class PasswordResetConfirmBody(
+    val token: String,
+    val new_password: String,
+)
