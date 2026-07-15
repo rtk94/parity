@@ -158,6 +158,21 @@ in DB) that should not be casually broken.
   session). Email transport stays off (safe no-op) until SMTP is
   configured, rollable-out staging-first like push. The Android
   forgot-password UI is a planned follow-up.
+- Post-Phase 8, attachments on expenses (backend, closes #12 — see
+  `docs/adr/0003-attachment-storage.md`): receipt photos / PDFs attached
+  to an expense. File bytes live in **S3-compatible object storage** via
+  a config-gated, provider-agnostic transport
+  (`app/services/object_store.py` — an `S3ObjectStore` when
+  `ATTACHMENT_S3_BUCKET` is set, working with S3/R2/OCI via
+  `ATTACHMENT_S3_ENDPOINT_URL`; a `LocalObjectStore` filesystem fallback
+  for dev/test, mirroring the push/email sender seams). Only metadata
+  lives in the DB (`attachment` table: filename, content-type, size,
+  sha256 checksum, opaque storage key, uploader). `app/api/attachments.py`
+  exposes upload (`multipart/form-data`, party-only), list, download
+  (streamed bytes), and uploader-only delete; a content-type allowlist
+  (jpeg/png/webp/heic/pdf) and `ATTACHMENT_MAX_BYTES` (default 10 MB)
+  gate uploads. Attachment metadata is included in the account export.
+  The Android UI is a planned follow-up.
 - Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.

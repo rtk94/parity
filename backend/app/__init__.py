@@ -70,10 +70,20 @@ def create_app(
 
     app.extensions["email_sender"] = build_email_sender(app.config)
 
+    # Object store for attachment bytes: S3-compatible when a bucket is
+    # configured, else local disk under instance/attachments/.
+    from app.services.object_store import build_object_store
+
+    app.extensions["object_store"] = build_object_store(
+        app.config,
+        default_local_dir=os.path.join(app.instance_path, "attachments"),
+    )
+
     # Import models so SQLAlchemy + Alembic see them.
     from app import models  # noqa: F401
     from app.api import (
         admin_bp,
+        attachments_bp,
         expenses_bp,
         health_bp,
         payments_bp,
@@ -91,6 +101,7 @@ def create_app(
     app.register_blueprint(payments_bp)
     app.register_blueprint(pending_bp)
     app.register_blueprint(recurring_bp)
+    app.register_blueprint(attachments_bp)
     app.register_blueprint(admin_bp)
     app.register_blueprint(cli_bp)
 
