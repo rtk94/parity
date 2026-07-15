@@ -65,6 +65,19 @@ class Config:
         os.environ.get("PASSWORD_RESET_LIFETIME_MINUTES", "60")
     )
 
+    # Attachment storage (see ADR-0003). Bytes go to S3-compatible object
+    # storage when ATTACHMENT_S3_BUCKET is set (works with S3, R2, or OCI
+    # Object Storage via ATTACHMENT_S3_ENDPOINT_URL); otherwise they land
+    # on local disk under instance/attachments/ (dev, tests, single-box).
+    ATTACHMENT_S3_BUCKET: str | None = os.environ.get("ATTACHMENT_S3_BUCKET") or None
+    ATTACHMENT_S3_ENDPOINT_URL: str | None = os.environ.get("ATTACHMENT_S3_ENDPOINT_URL") or None
+    ATTACHMENT_S3_REGION: str | None = os.environ.get("ATTACHMENT_S3_REGION") or None
+    ATTACHMENT_S3_ACCESS_KEY: str | None = os.environ.get("ATTACHMENT_S3_ACCESS_KEY") or None
+    ATTACHMENT_S3_SECRET_KEY: str | None = os.environ.get("ATTACHMENT_S3_SECRET_KEY") or None
+    ATTACHMENT_LOCAL_DIR: str | None = os.environ.get("ATTACHMENT_LOCAL_DIR") or None
+    # Maximum upload size in bytes (default 10 MiB).
+    ATTACHMENT_MAX_BYTES: int = int(os.environ.get("ATTACHMENT_MAX_BYTES", str(10 * 1024 * 1024)))
+
 
 class DevelopmentConfig(Config):
     DEBUG: bool = True

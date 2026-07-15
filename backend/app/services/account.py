@@ -18,6 +18,7 @@ from sqlalchemy import delete, or_, select, update
 
 from app.api._serializers import (
     iso8601_z,
+    serialize_attachment,
     serialize_comment,
     serialize_expense,
     serialize_payment,
@@ -35,6 +36,7 @@ from app.models import (
     Relationship,
     User,
 )
+from app.services import attachments as attachments_service
 
 
 def export_data(user: User) -> dict[str, Any]:
@@ -68,6 +70,7 @@ def export_data(user: User) -> dict[str, Any]:
         else []
     )
     comments = db.session.execute(select(Comment).where(Comment.user_id == user.id)).scalars().all()
+    attachments = attachments_service.attachments_for_relationship_ids(rel_ids)
 
     return {
         "exported_at": iso8601_z(datetime.now(UTC)),
@@ -82,6 +85,7 @@ def export_data(user: User) -> dict[str, Any]:
         "expenses": [serialize_expense(e) for e in expenses],
         "payments": [serialize_payment(p) for p in payments],
         "comments": [serialize_comment(c) for c in comments],
+        "attachments": [serialize_attachment(a) for a in attachments],
     }
 
 
