@@ -60,6 +60,13 @@ Generation is driven by the `flask run-recurring` CLI command (intended for a da
 - `GET /api/v1/payments/<id>/comments`: List comments on a payment.
 - `POST /api/v1/payments/<id>/comments`: Post a comment on a payment.
 
+## Attachments
+Receipt photos or PDFs attached to an expense (see [ADR-0003](adr/0003-attachment-storage.md)). File bytes live in object storage; only metadata is in the DB. Both parties to the expense's relationship can view and upload; the uploader can delete. Allowed types: `image/jpeg`, `image/png`, `image/webp`, `image/heic`, `application/pdf`; max size `ATTACHMENT_MAX_BYTES` (default 10 MB).
+- `POST /api/v1/expenses/<id>/attachments`: Upload a file (`multipart/form-data`, field `file`). Returns the attachment metadata.
+- `GET /api/v1/expenses/<id>/attachments`: List attachment metadata for an expense.
+- `GET /api/v1/attachments/<id>`: Download the file bytes (streamed with its content-type).
+- `DELETE /api/v1/attachments/<id>`: Delete an attachment (uploader only); removes the object.
+
 ## Admin
 Operator-only; all require the signed-in user to be an admin.
 - `GET /api/v1/admin/stats`: Row counts across the database.

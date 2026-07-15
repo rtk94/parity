@@ -65,10 +65,16 @@ run-recurring` CLI for a daily cron — materialises a pending expense per
 due template, firing at most once per template per run. Closes issue
 #11. The Android UI for managing templates is a possible follow-up.
 
-### Attachments on expenses
+### Attachments on expenses — shipped (backend)
 
-Receipt photos or other supporting files attached to an expense.
-Deferred from Phase 2. (Issue #12.)
+Receipt photos or PDFs attached to an expense (see
+[ADR-0003](docs/adr/0003-attachment-storage.md)). File bytes go to
+S3-compatible object storage via a config-gated, provider-agnostic
+transport (`app/services/object_store.py`; local-filesystem fallback for
+dev/test), with only metadata (`attachment` table) in the DB. Endpoints
+under `app/api/attachments.py` cover upload (`multipart/form-data`),
+list, download, and uploader-only delete; both parties can view and
+upload. Closes issue #12 on the backend. The Android UI is a follow-up.
 
 ## Android
 

@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from app.models import (
+    Attachment,
     Comment,
     Expense,
     Payment,
@@ -115,6 +116,19 @@ def serialize_recurring_expense(template: RecurringExpense) -> dict[str, Any]:
             {"user_id": share.user_id, "amount_cents": share.amount_cents}
             for share in template.shares
         ],
+    }
+
+
+def serialize_attachment(attachment: Attachment) -> dict[str, Any]:
+    return {
+        "id": attachment.id,
+        "expense_id": attachment.expense_id,
+        "uploaded_by_user_id": attachment.uploaded_by_user_id,
+        "filename": attachment.filename,
+        "content_type": attachment.content_type,
+        "size_bytes": attachment.size_bytes,
+        "checksum_sha256": attachment.checksum_sha256,
+        "created_at": iso8601_z(attachment.created_at),
     }
 
 

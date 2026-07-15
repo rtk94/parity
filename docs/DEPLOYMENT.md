@@ -195,6 +195,33 @@ email on a test account (`PATCH /auth/me`), request a reset, and confirm
 the message arrives. `create_app().extensions["email_sender"]` should be
 `SmtpEmailSender`, not `NullEmailSender`, once `MAIL_SERVER` is set.
 
+## Attachment storage
+
+Expense attachments (see
+[ADR-0003](adr/0003-attachment-storage.md)) store file bytes in
+**S3-compatible object storage**, with only metadata in the database.
+With `ATTACHMENT_S3_BUCKET` unset the backend falls back to the **local
+filesystem** (`instance/attachments`), which is fine for dev but ties
+files to one box in production — configure object storage for prod.
+
+The client is provider-agnostic (boto3), so point it at OCI Object
+Storage (the box is an OCI instance), Amazon S3, or Cloudflare R2. Set
+in `.env` (see `backend/.env.example`):
+
+```bash
+ATTACHMENT_S3_BUCKET=parity-attachments
+ATTACHMENT_S3_ENDPOINT_URL=https://<namespace>.compat.objectstorage.us-ashburn-1.oraclecloud.com
+ATTACHMENT_S3_REGION=us-ashburn-1
+ATTACHMENT_S3_ACCESS_KEY=<key>
+ATTACHMENT_S3_SECRET_KEY=<secret>
+# ATTACHMENT_MAX_BYTES=10485760   # 10 MB default
+```
+
+Create the bucket as **private** (attachments are financial records —
+never world-readable); the app streams downloads through the
+authenticated API rather than handing out public URLs. After
+configuring, restart and verify an upload/download round-trips.
+
 ## Scheduled jobs
 
 Two maintenance commands are meant to run on a timer. Both are Flask CLI
