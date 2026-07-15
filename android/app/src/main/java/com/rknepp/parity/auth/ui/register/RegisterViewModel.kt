@@ -25,6 +25,7 @@ data class RegisterState(
     val username: String = "",
     val password: String = "",
     val displayName: String = "",
+    val email: String = "",
     val submitting: Boolean = false,
     val error: RegisterError? = null,
 )
@@ -45,6 +46,9 @@ class RegisterViewModel(
     fun onDisplayNameChange(value: String) {
         _state.update { it.copy(displayName = value, error = null) }
     }
+    fun onEmailChange(value: String) {
+        _state.update { it.copy(email = value, error = null) }
+    }
 
     fun submit(onRegistered: (username: String) -> Unit) {
         val s = _state.value
@@ -53,10 +57,12 @@ class RegisterViewModel(
 
         _state.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
+            val email = s.email.trim().ifBlank { null }
             val result = authRepository.register(
                 username = s.username.trim(),
                 password = s.password,
                 displayName = s.displayName.trim(),
+                email = email,
             )
             when (result) {
                 is ApiResult.Success -> {
@@ -67,7 +73,10 @@ class RegisterViewModel(
                     val mapped = when {
                         result.code == 409 && result.error?.code == "username_taken" ->
                             RegisterError.UsernameTaken
-                        result.code == 422 && result.error != null ->
+                        // email_taken (409) and invalid_email (422) both
+                        // carry a user-friendly server message.
+                        result.error != null &&
+                            (result.code == 409 || result.code == 422) ->
                             RegisterError.ServerMessage(result.error.message)
                         else -> RegisterError.Generic
                     }

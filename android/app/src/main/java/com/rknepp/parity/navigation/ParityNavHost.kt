@@ -19,6 +19,7 @@ import androidx.navigation.toRoute
 import com.rknepp.parity.app.LocalServiceLocator
 import com.rknepp.parity.app.StartupDestination
 import com.rknepp.parity.auth.events.AuthEvent
+import com.rknepp.parity.auth.ui.forgot.ForgotPasswordScreen
 import com.rknepp.parity.auth.ui.login.LoginScreen
 import com.rknepp.parity.auth.ui.register.RegisterScreen
 import com.rknepp.parity.ledger.ui.CreateExpenseScreen
@@ -92,6 +93,20 @@ fun ParityNavHost(
                     }
                 },
                 onNavigateToRegister = { navController.navigate(Route.Register) },
+                onNavigateToForgotPassword = { navController.navigate(Route.ForgotPassword) },
+            )
+        }
+        composable<Route.ForgotPassword> {
+            ForgotPasswordScreen(
+                // Reset revokes every session; the user returns to the
+                // login screen to sign in with the new password.
+                onResetComplete = {
+                    navController.navigate(Route.Login()) {
+                        popUpTo(0) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                onBackToLogin = { navController.popBackStack() },
             )
         }
         composable<Route.Register> {

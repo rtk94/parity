@@ -3,6 +3,8 @@ package com.rknepp.parity.auth.data
 import com.rknepp.parity.auth.data.dto.DeleteAccountRequest
 import com.rknepp.parity.auth.data.dto.LoginRequest
 import com.rknepp.parity.auth.data.dto.LoginResponse
+import com.rknepp.parity.auth.data.dto.PasswordResetConfirmBody
+import com.rknepp.parity.auth.data.dto.PasswordResetRequestBody
 import com.rknepp.parity.auth.data.dto.RegisterDeviceRequest
 import com.rknepp.parity.auth.data.dto.RegisterRequest
 import com.rknepp.parity.auth.data.dto.UnregisterDeviceRequest
@@ -32,6 +34,12 @@ interface AuthApi {
 
     @POST("api/v1/auth/change-password")
     suspend fun changePassword(@Body body: com.rknepp.parity.auth.data.dto.ChangePasswordRequest): Response<Unit>
+
+    @POST("api/v1/auth/password-reset/request")
+    suspend fun requestPasswordReset(@Body body: PasswordResetRequestBody): Response<Unit>
+
+    @POST("api/v1/auth/password-reset/confirm")
+    suspend fun confirmPasswordReset(@Body body: PasswordResetConfirmBody): Response<Unit>
 
     @retrofit2.http.PATCH("api/v1/auth/me")
     suspend fun updateProfile(@Body body: com.rknepp.parity.auth.data.dto.UpdateProfileRequest): Response<UserSummary>

@@ -28,6 +28,8 @@ data class SettingsState(
     val profileLoaded: Boolean = false,
     val username: String = "",
     val displayName: String = "",
+    // Recovery email; empty when the account has none set.
+    val email: String = "",
     val isSavingProfile: Boolean = false,
     val profileError: String? = null,
     val profileSuccess: Boolean = false,
@@ -78,6 +80,7 @@ class SettingsViewModel(
                         profileLoaded = true,
                         username = result.data.username,
                         displayName = result.data.displayName,
+                        email = result.data.email.orEmpty(),
                         isAdmin = result.data.isAdmin,
                     )
                 }
@@ -86,19 +89,23 @@ class SettingsViewModel(
         }
     }
 
-    fun updateProfile(displayName: String) {
+    fun updateProfile(displayName: String, email: String) {
         if (displayName.isBlank()) {
             _state.update { it.copy(profileError = "Display name cannot be empty") }
             return
         }
         _state.update { it.copy(isSavingProfile = true, profileError = null, profileSuccess = false) }
         viewModelScope.launch {
-            when (val result = meRepository.updateProfile(UpdateProfileRequest(displayName.trim()))) {
+            // Email is sent as-is (trimmed): a blank string clears the
+            // recovery address server-side, a value sets it.
+            val request = UpdateProfileRequest(displayName.trim(), email.trim())
+            when (val result = meRepository.updateProfile(request)) {
                 is ApiResult.Success -> _state.update {
                     it.copy(
                         isSavingProfile = false,
                         profileSuccess = true,
                         displayName = result.data.displayName,
+                        email = result.data.email.orEmpty(),
                     )
                 }
                 is ApiResult.HttpFailure -> _state.update {

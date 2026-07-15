@@ -35,6 +35,8 @@ class RelationshipDetailViewModelTest {
         override suspend fun logout() = error("unused")
         override suspend fun refresh() = error("unused")
         override suspend fun changePassword(body: com.rknepp.parity.auth.data.dto.ChangePasswordRequest) = error("unused")
+        override suspend fun requestPasswordReset(body: com.rknepp.parity.auth.data.dto.PasswordResetRequestBody) = error("unused")
+        override suspend fun confirmPasswordReset(body: com.rknepp.parity.auth.data.dto.PasswordResetConfirmBody) = error("unused")
         override suspend fun updateProfile(body: com.rknepp.parity.auth.data.dto.UpdateProfileRequest) = error("unused")
         override suspend fun exportData() = error("unused")
         override suspend fun deleteAccount(body: com.rknepp.parity.auth.data.dto.DeleteAccountRequest) = error("unused")

@@ -16,6 +16,7 @@
     <string name="login_password_label">Password</string>
     <string name="login_button">Sign in</string>
     <string name="login_register_link">Create an account</string>
+    <string name="login_forgot_password_link">Forgot password?</string>
     <string name="login_error_invalid_credentials">Invalid username or password.</string>
     <string name="login_error_rate_limited">Too many attempts. Try again later.</string>
     <string name="login_error_network">Cannot reach server.</string>
@@ -29,9 +30,29 @@
     <string name="register_password_helper">At least 8 characters</string>
     <string name="register_display_name_label">Display name</string>
     <string name="register_display_name_helper">Shown to people you share a ledger with</string>
+    <string name="register_email_label">Email (optional)</string>
+    <string name="register_email_helper">Used only for password resets. You can add it later.</string>
     <string name="register_button">Register</string>
     <string name="register_back_to_login">Back to sign in</string>
     <string name="register_error_username_taken">Username already taken.</string>
     <string name="register_error_network">Cannot reach server.</string>
     <string name="register_error_generic">Something went wrong. Please try again.</string>
+
+    <!-- Forgot-password screen -->
+    <string name="forgot_title">Reset password</string>
+    <string name="forgot_request_subtitle">Enter your account email and we\'ll send a reset code.</string>
+    <string name="forgot_confirm_subtitle">Enter the code from your email and choose a new password.</string>
+    <string name="forgot_email_label">Email</string>
+    <string name="forgot_request_button">Send reset code</string>
+    <string name="forgot_token_label">Reset code</string>
+    <string name="forgot_new_password_label">New password</string>
+    <string name="forgot_new_password_helper">At least 8 characters</string>
+    <string name="forgot_confirm_button">Set new password</string>
+    <string name="forgot_back_to_login">Back to sign in</string>
+    <string name="forgot_back_to_request">Use a different email</string>
+    <string name="forgot_error_invalid_token">This reset code is invalid or has expired.</string>
+    <string name="forgot_error_weak_password">Password must be at least 8 characters.</string>
+    <string name="forgot_error_rate_limited">Too many attempts. Try again later.</string>
+    <string name="forgot_error_network">Cannot reach server.</string>
+    <string name="forgot_error_generic">Something went wrong. Please try again.</string>
 </resources>

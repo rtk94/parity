@@ -114,6 +114,43 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun registerWithEmailIncludesEmailInBody() = runBlocking {
+        server.enqueue(jsonResponse(201, """{"id":8,"username":"dave","display_name":"Dave"}"""))
+
+        val result = repo.register("dave", "pw", "Dave", "dave@example.com")
+
+        assertTrue(result is ApiResult.Success)
+        val sent = server.takeRequest().body.readUtf8()
+        assertTrue(sent.contains("\"email\":\"dave@example.com\""))
+    }
+
+    @Test
+    fun registerWithoutEmailOmitsEmailFromBody() = runBlocking {
+        server.enqueue(jsonResponse(201, """{"id":9,"username":"erin","display_name":"Erin"}"""))
+
+        // No email argument -> null -> omitted from JSON (explicitNulls =
+        // false), so the backend treats it as "no recovery address".
+        val result = repo.register("erin", "pw", "Erin")
+
+        assertTrue(result is ApiResult.Success)
+        val sent = server.takeRequest().body.readUtf8()
+        assertTrue("email must be absent, was: $sent", !sent.contains("email"))
+    }
+
+    @Test
+    fun registerEmailConflictSurfacesParsedFailure() = runBlocking {
+        val body = """{"error":{"code":"email_taken","message":"Email is already in use."}}"""
+        server.enqueue(jsonResponse(409, body))
+
+        val result = repo.register("frank", "pw", "Frank", "taken@example.com")
+
+        assertTrue(result is ApiResult.HttpFailure)
+        val fail = result as ApiResult.HttpFailure
+        assertEquals(409, fail.code)
+        assertEquals("email_taken", fail.error?.code)
+    }
+
+    @Test
     fun registerConflictReturnsParsedUsernameTaken() = runBlocking {
         val body = """
             {"error":{"code":"username_taken","message":"Username is already taken."}}
@@ -166,6 +203,47 @@ class AuthRepositoryTest {
         assertEquals("invalid_password", (result as ApiResult.HttpFailure).error?.code)
         // The account is untouched, so the local session must survive.
         assertEquals("seeded-token", tokenStore.token.first())
+    }
+
+    @Test
+    fun requestPasswordResetSendsEmailAndSucceedsOn204() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = repo.requestPasswordReset("alice@example.com")
+
+        assertTrue(result is ApiResult.Success)
+        val recorded = server.takeRequest()
+        assertEquals("/api/v1/auth/password-reset/request", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"email\":\"alice@example.com\""))
+    }
+
+    @Test
+    fun confirmPasswordResetSendsTokenAndNewPasswordAndSucceedsOn204() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = repo.confirmPasswordReset("tok-abc", "brandnewpass")
+
+        assertTrue(result is ApiResult.Success)
+        val recorded = server.takeRequest()
+        assertEquals("/api/v1/auth/password-reset/confirm", recorded.path)
+        val sent = recorded.body.readUtf8()
+        assertTrue(sent.contains("\"token\":\"tok-abc\""))
+        assertTrue(sent.contains("\"new_password\":\"brandnewpass\""))
+    }
+
+    @Test
+    fun confirmPasswordResetWeakPasswordSurfacesParsedFailure() = runBlocking {
+        val body = """
+            {"error":{"code":"weak_password","message":"new_password is too short.","details":{"min_length":8}}}
+        """.trimIndent()
+        server.enqueue(jsonResponse(422, body))
+
+        val result = repo.confirmPasswordReset("tok-abc", "short")
+
+        assertTrue(result is ApiResult.HttpFailure)
+        val fail = result as ApiResult.HttpFailure
+        assertEquals(422, fail.code)
+        assertEquals("weak_password", fail.error?.code)
     }
 
     @Test
