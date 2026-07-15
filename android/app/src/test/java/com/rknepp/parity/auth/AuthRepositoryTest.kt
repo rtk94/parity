@@ -169,6 +169,47 @@ class AuthRepositoryTest {
     }
 
     @Test
+    fun requestPasswordResetSendsEmailAndSucceedsOn204() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = repo.requestPasswordReset("alice@example.com")
+
+        assertTrue(result is ApiResult.Success)
+        val recorded = server.takeRequest()
+        assertEquals("/api/v1/auth/password-reset/request", recorded.path)
+        assertTrue(recorded.body.readUtf8().contains("\"email\":\"alice@example.com\""))
+    }
+
+    @Test
+    fun confirmPasswordResetSendsTokenAndNewPasswordAndSucceedsOn204() = runBlocking {
+        server.enqueue(MockResponse().setResponseCode(204))
+
+        val result = repo.confirmPasswordReset("tok-abc", "brandnewpass")
+
+        assertTrue(result is ApiResult.Success)
+        val recorded = server.takeRequest()
+        assertEquals("/api/v1/auth/password-reset/confirm", recorded.path)
+        val sent = recorded.body.readUtf8()
+        assertTrue(sent.contains("\"token\":\"tok-abc\""))
+        assertTrue(sent.contains("\"new_password\":\"brandnewpass\""))
+    }
+
+    @Test
+    fun confirmPasswordResetWeakPasswordSurfacesParsedFailure() = runBlocking {
+        val body = """
+            {"error":{"code":"weak_password","message":"new_password is too short.","details":{"min_length":8}}}
+        """.trimIndent()
+        server.enqueue(jsonResponse(422, body))
+
+        val result = repo.confirmPasswordReset("tok-abc", "short")
+
+        assertTrue(result is ApiResult.HttpFailure)
+        val fail = result as ApiResult.HttpFailure
+        assertEquals(422, fail.code)
+        assertEquals("weak_password", fail.error?.code)
+    }
+
+    @Test
     fun verifyServerUrlSuccess() = runBlocking {
         server.enqueue(jsonResponse(200, """{"status":"ok","database":"ok"}"""))
         val result = repo.verifyServerUrl(server.url("/").toString().trimEnd('/'))

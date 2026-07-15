@@ -2,6 +2,8 @@ package com.rknepp.parity.auth.data
 
 import com.rknepp.parity.auth.data.dto.DeleteAccountRequest
 import com.rknepp.parity.auth.data.dto.LoginRequest
+import com.rknepp.parity.auth.data.dto.PasswordResetConfirmBody
+import com.rknepp.parity.auth.data.dto.PasswordResetRequestBody
 import com.rknepp.parity.auth.data.dto.RegisterRequest
 import com.rknepp.parity.home.model.UserSummary
 import com.rknepp.parity.network.ApiResult
@@ -65,6 +67,25 @@ class AuthRepository(
         }
         return result
     }
+
+    /**
+     * Requests a password-reset token be emailed. The backend is
+     * enumeration-resistant — it returns 204 whether or not the address
+     * is registered — so a [ApiResult.Success] here only means the
+     * request was accepted, not that an email was sent.
+     */
+    suspend fun requestPasswordReset(email: String): ApiResult<Unit> =
+        apiCallUnit { authApiProvider().requestPasswordReset(PasswordResetRequestBody(email)) }
+
+    /**
+     * Consumes a reset token and sets a new password. On success the
+     * backend has revoked every existing session for the account, so the
+     * user must sign in again with the new password.
+     */
+    suspend fun confirmPasswordReset(token: String, newPassword: String): ApiResult<Unit> =
+        apiCallUnit {
+            authApiProvider().confirmPasswordReset(PasswordResetConfirmBody(token, newPassword))
+        }
 
     /**
      * Validates a candidate server URL by hitting /api/v1/health.
