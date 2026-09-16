@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -5,6 +7,19 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.google.services)
 }
+
+// Release signing. The upload key and its password live in
+// android/keystore.properties (gitignored, alongside the .jks itself).
+// When that file is absent — CI, a fresh clone — the release build still
+// assembles, just unsigned, the same way the committed google-services.json
+// placeholder keeps the Google Services plugin working without real configs.
+val keystorePropertiesFile = rootProject.file("keystore.properties")
+val keystoreProperties = Properties().apply {
+    if (keystorePropertiesFile.exists()) {
+        keystorePropertiesFile.inputStream().use { load(it) }
+    }
+}
+val hasUploadKey = keystoreProperties.getProperty("storeFile") != null
 
 android {
     namespace = "com.rknepp.parity"
@@ -20,6 +35,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasUploadKey) {
+            create("upload") {
+                storeFile = rootProject.file(keystoreProperties.getProperty("storeFile"))
+                storePassword = keystoreProperties.getProperty("storePassword")
+                keyAlias = keystoreProperties.getProperty("keyAlias")
+                keyPassword = keystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         // Environment is pinned to the build type: release targets
         // production, debug targets staging. Each carries both its
@@ -27,6 +53,9 @@ android {
         // src/release/ and src/debug/ respectively), so the backend and
         // the Firebase project always switch together.
         release {
+            if (hasUploadKey) {
+                signingConfig = signingConfigs.getByName("upload")
+            }
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
