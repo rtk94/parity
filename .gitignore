@@ -88,8 +88,20 @@ android/local.properties
 android/**/build/
 android/**/*.iml
 android/captures/
+
+# Release signing material — the upload key and its password. Losing these
+# means you can no longer ship updates under the same upload key (Play App
+# Signing allows a reset, but it is a manual, slow process). Back them up
+# offline; never commit them.
+android/upload-keystore.jks
+android/keystore.properties
+*.jks
+*.keystore
 android/.kotlin/
 *.apk
 *.aab
 *.hprof
 
+
+# Local build artifacts staged for upload (AABs/APKs)
+dist/
