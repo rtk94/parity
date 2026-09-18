@@ -41,6 +41,9 @@ class E2ETests {
         composeTestRule.waitForIdle()
         composeTestRule.onNodeWithText("Username").performTextReplacement(username)
         composeTestRule.onNodeWithText("Display name").performTextReplacement(displayName)
+        // Email is required — the Register button stays disabled without
+        // one, and the account would be unrecoverable besides.
+        composeTestRule.onNodeWithText("Email").performTextReplacement("$username@example.test")
         composeTestRule.onNodeWithText("Password").performTextReplacement("password123")
         Espresso.closeSoftKeyboard()
         composeTestRule.onNodeWithText("Register").performClick()
