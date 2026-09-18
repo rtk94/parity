@@ -113,15 +113,17 @@ All endpoints live under `/api/v1`. Every endpoint except `register`,
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | `GET`  | `/health` | Service + DB liveness. |
-| `POST` | `/auth/register` | Create a user. |
+| `POST` | `/auth/register` | Create a user. Requires `email` — the recovery address (see below). |
 | `POST` | `/auth/login` | Exchange credentials for a bearer token. |
 | `POST` | `/auth/logout` | Revoke the calling token. |
 | `POST` | `/auth/refresh` | Issue a fresh token, revoke the request token. |
 | `POST` | `/auth/change-password` | Change the caller's password; revokes other sessions. |
 | `GET`  | `/auth/me` | Return the calling user (includes `is_admin` for the caller only). |
-| `PATCH` | `/auth/me` | Update the caller's profile (`display_name`). |
+| `PATCH` | `/auth/me` | Update the caller's profile (`display_name`, `email`). `email` cannot be cleared. |
 | `GET`  | `/auth/me/export` | Machine-readable JSON dump of the caller's account (user, relationships, expenses, payments, comments). |
 | `DELETE` | `/auth/me` | Delete (anonymize) the caller's account; requires the password in the body. See below. |
+| `POST` | `/auth/password-reset/request` | Request a reset code by email (`{email}`). Always `204`. |
+| `POST` | `/auth/password-reset/confirm` | Consume a code (`{email, code, new_password}`); revokes every session. |
 | `POST` | `/auth/devices` | Register this device's push token (`{token, platform?}`). |
 | `DELETE` | `/auth/devices` | Remove this device's push token (`{token}`); called on logout. |
 | `POST` | `/relationships` | Invite another user (optionally with a bundled first expense). |
@@ -407,9 +409,9 @@ BASE=http://localhost:5000/api/v1
 
 # 1. Register two users.
 curl -s -X POST $BASE/auth/register -H 'Content-Type: application/json' \
-    -d '{"username":"alice","password":"pw-alice","display_name":"Alice"}'
+    -d '{"username":"alice","password":"pw-alice","display_name":"Alice","email":"alice@example.com"}'
 curl -s -X POST $BASE/auth/register -H 'Content-Type: application/json' \
-    -d '{"username":"bob","password":"pw-bob","display_name":"Bob"}'
+    -d '{"username":"bob","password":"pw-bob","display_name":"Bob","email":"bob@example.com"}'
 
 # 2. Log in as each and capture tokens.
 A_TOK=$(curl -s -X POST $BASE/auth/login -H 'Content-Type: application/json' \
@@ -516,10 +518,15 @@ single self-hosted instance.
 | `RATELIMIT_REGISTER`            | `5 per hour`      | Per remote IP cap on `POST /auth/register`. |
 | `RATELIMIT_WRITE`               | `60 per minute`   | Per authenticated user cap on all `POST` endpoints under `relationships`, `expenses`, and `payments`. |
 | `RATELIMIT_CHANGE_PASSWORD`     | `5 per hour`      | Per authenticated user cap on `POST /auth/change-password`. |
+| `RATELIMIT_PASSWORD_RESET`      | `5 per hour`      | Per remote IP cap on `POST /auth/password-reset/request`. |
+| `RATELIMIT_PASSWORD_RESET_CONFIRM` | `10 per hour`  | Per remote IP cap on `POST /auth/password-reset/confirm`. Looser than request: guessing is bounded by the per-code attempt counter, so this only stops an IP hammering the endpoint. |
 | `RATELIMIT_REFRESH`             | `10 per hour`     | Per authenticated user cap on `POST /auth/refresh`. |
 | `TOKEN_ABSOLUTE_LIFETIME_DAYS`  | `365`             | Hard cap from a token's `created_at`. Past this, requests return `401 token_expired`. |
 | `TOKEN_IDLE_LIFETIME_DAYS`      | `30`              | Sliding cap from `last_used_at`. Past this without a successful request, the token expires. |
 | `FCM_CREDENTIALS_FILE`          | _(unset)_         | Path to a Google service-account JSON (FCM v1 API) for push notifications. Unset ⇒ push disabled (a no-op sender). Each environment points at its own project's file. |
+| `MAIL_SERVER`                   | _(unset)_         | SMTP relay host for password-reset and welcome email. **Unset ⇒ email disabled** (a no-op sender), which makes account recovery impossible — see `docs/DEPLOYMENT.md`. |
+| `PASSWORD_RESET_LIFETIME_MINUTES` | `15`            | How long an emailed reset code stays valid. |
+| `PASSWORD_RESET_MAX_ATTEMPTS`   | `5`               | Wrong guesses before a reset code is burned. This cap, not the IP rate limit, is what makes a short numeric code safe. |
 
 `GET` endpoints are not rate-limited. Hitting any limit returns HTTP
 429 with the standard error envelope (`code: "rate_limited"`, plus

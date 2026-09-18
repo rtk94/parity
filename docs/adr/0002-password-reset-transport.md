@@ -101,3 +101,75 @@ ADR-0001.
   didn't save them. Higher UX cost for less reach than email.
 - **SMS / phone.** More PII, per-message cost, and weaker security than
   email for this purpose. Rejected.
+
+---
+
+## Amendment (2026-09-17): email required, short code credential
+
+**Status:** Accepted, amending the Decision section above.
+
+### Context
+
+The first internal-testing release put this flow in front of real
+users, and it could not work for any of them. Three faults compounded:
+no `MAIL_SERVER` was ever configured on the hosted instance, so the
+request endpoint returned its enumeration-resistant `204` while
+`NullEmailSender` dropped every message; email was optional, so most
+test accounts had no address to send to; and the credential was a
+43-character URL-safe token that the Android UI asked users to hand-type
+into a field it already labelled a "reset code".
+
+### Changes
+
+1. **Email is now required**, superseding Decision 1. It is mandatory at
+   registration and can no longer be cleared via `PATCH /me`. The
+   Android client blocks legacy email-less accounts behind a prompt at
+   login until an address is supplied.
+
+   This **narrows the minimal-data position** in
+   [VISION.md](../VISION.md) §4, and the trade is deliberate: an
+   account nobody can recover is the worse custodianship outcome. Email
+   remains hidden from counterparties, exported, and cleared on
+   deletion, so every other commitment in that section stands.
+
+2. **The credential is an 8-digit numeric code**, not a long token. The
+   stored digest is **scoped to the owning user** (`sha256("<user_id>:<code>")`).
+   That scoping is load-bearing: an unscoped short code would be
+   guessable against *any* account holding a live code, turning a
+   per-account guess into a pooled one. `confirm` therefore takes
+   `{email, code, new_password}` and resolves the account before
+   checking the code.
+
+3. **Each code has an attempt budget** (`PASSWORD_RESET_MAX_ATTEMPTS`,
+   default 5). A wrong guess increments a counter; a spent budget burns
+   the code. This cap, not the per-IP rate limit, is the real guard on a
+   short code — the rate limit was split so `confirm` (10/hour) is
+   looser than `request` (5/hour) and a user who mistypes their own code
+   is not locked out along with everyone behind their NAT.
+
+4. **The lifetime drops from 60 to 15 minutes**, and
+   `PASSWORD_RESET_URL_BASE` is removed. There is no web client, so a
+   link in the email had nowhere to land.
+
+### Consequences
+
+- **Known weakness:** SHA-256 of an 8-digit code has only 10^8
+  preimages, so an attacker holding a database dump can recover a live
+  code offline. The mitigations are the 15-minute window, single use,
+  and the attempt cap — and an attacker with the database can already
+  rewrite `password_hash` directly, so this is not the marginal risk it
+  might appear. Revisit if reset ever guards something the database
+  itself does not.
+- The `user.email` column stays **nullable** at the DB level: deleted
+  accounts null it out as part of anonymization, so `NOT NULL` is not
+  available. The requirement is enforced in the service/API layer.
+- `POST /auth/password-reset/confirm` changed shape, breaking the
+  already-shipped internal-testing build. That build's reset path never
+  worked, so nothing functional is lost, but testers need the new APK.
+- Registration now sends a **welcome email** naming the recovery
+  address. It doubles as a live delivery check at the moment the address
+  is typed, so a typo surfaces at signup rather than when the user is
+  locked out. It is best-effort and never blocks registration.
+- Delivery is still synchronous on the request thread (the SMTP timeout
+  is now 5s rather than 10s). Moving it off-thread remains the open
+  follow-up from the original Consequences section.
