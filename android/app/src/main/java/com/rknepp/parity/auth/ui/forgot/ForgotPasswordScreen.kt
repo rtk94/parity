@@ -92,12 +92,13 @@ fun ForgotPasswordScreen(
                     onSubmit = vm::requestReset,
                 )
                 ResetPhase.Confirm -> ConfirmFields(
-                    token = state.token,
+                    code = state.code,
+                    codeComplete = state.codeComplete,
                     newPassword = state.newPassword,
                     submitting = state.submitting,
                     passwordVisible = passwordVisible,
                     onTogglePasswordVisible = { passwordVisible = !passwordVisible },
-                    onTokenChange = vm::onTokenChange,
+                    onCodeChange = vm::onCodeChange,
                     onNewPasswordChange = vm::onNewPasswordChange,
                     onSubmit = { vm.confirmReset(onResetComplete) },
                 )
@@ -164,24 +165,29 @@ private fun RequestFields(
 
 @Composable
 private fun ConfirmFields(
-    token: String,
+    code: String,
+    codeComplete: Boolean,
     newPassword: String,
     submitting: Boolean,
     passwordVisible: Boolean,
     onTogglePasswordVisible: () -> Unit,
-    onTokenChange: (String) -> Unit,
+    onCodeChange: (String) -> Unit,
     onNewPasswordChange: (String) -> Unit,
     onSubmit: () -> Unit,
 ) {
     OutlinedTextField(
-        value = token,
-        onValueChange = onTokenChange,
-        label = { Text(stringResource(R.string.forgot_token_label)) },
+        value = code,
+        onValueChange = onCodeChange,
+        label = { Text(stringResource(R.string.forgot_code_label)) },
         singleLine = true,
         enabled = !submitting,
+        supportingText = { Text(stringResource(R.string.forgot_code_helper)) },
+        // A numeric keypad for a numeric code. The view model filters to
+        // digits regardless, so a pasted "1234 5678" still lands clean.
         keyboardOptions = KeyboardOptions(
             capitalization = KeyboardCapitalization.None,
             autoCorrect = false,
+            keyboardType = KeyboardType.NumberPassword,
             imeAction = ImeAction.Next,
         ),
         modifier = Modifier.fillMaxWidth(),
@@ -217,7 +223,7 @@ private fun ConfirmFields(
     PrimaryButton(
         label = stringResource(R.string.forgot_confirm_button),
         enabled = !submitting &&
-            token.isNotBlank() &&
+            codeComplete &&
             newPassword.length >= MIN_RESET_PASSWORD_LENGTH,
         submitting = submitting,
         onClick = onSubmit,

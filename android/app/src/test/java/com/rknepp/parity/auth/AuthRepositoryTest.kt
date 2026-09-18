@@ -108,7 +108,7 @@ class AuthRepositoryTest {
         val body = """{"id":7,"username":"carol","display_name":"Carol"}"""
         server.enqueue(jsonResponse(201, body))
 
-        val result = repo.register("carol", "pw", "Carol")
+        val result = repo.register("carol", "pw", "Carol", "carol@example.com")
         assertTrue(result is ApiResult.Success)
         assertEquals(7L, (result as ApiResult.Success).data.id)
     }
@@ -125,16 +125,16 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun registerWithoutEmailOmitsEmailFromBody() = runBlocking {
+    fun registerAlwaysSendsEmail() = runBlocking {
         server.enqueue(jsonResponse(201, """{"id":9,"username":"erin","display_name":"Erin"}"""))
 
-        // No email argument -> null -> omitted from JSON (explicitNulls =
-        // false), so the backend treats it as "no recovery address".
-        val result = repo.register("erin", "pw", "Erin")
+        // Email is mandatory now, so it is never omitted: an account
+        // without one could never be recovered.
+        val result = repo.register("erin", "pw", "Erin", "erin@example.com")
 
         assertTrue(result is ApiResult.Success)
         val sent = server.takeRequest().body.readUtf8()
-        assertTrue("email must be absent, was: $sent", !sent.contains("email"))
+        assertTrue("email must be present, was: $sent", sent.contains("\"email\":\"erin@example.com\""))
     }
 
     @Test
@@ -157,7 +157,7 @@ class AuthRepositoryTest {
         """.trimIndent()
         server.enqueue(jsonResponse(409, body))
 
-        val result = repo.register("carol", "pw", "Carol")
+        val result = repo.register("carol", "pw", "Carol", "carol@example.com")
         assertTrue(result is ApiResult.HttpFailure)
         val fail = result as ApiResult.HttpFailure
         assertEquals(409, fail.code)
@@ -218,16 +218,18 @@ class AuthRepositoryTest {
     }
 
     @Test
-    fun confirmPasswordResetSendsTokenAndNewPasswordAndSucceedsOn204() = runBlocking {
+    fun confirmPasswordResetSendsEmailCodeAndNewPasswordAndSucceedsOn204() = runBlocking {
         server.enqueue(MockResponse().setResponseCode(204))
 
-        val result = repo.confirmPasswordReset("tok-abc", "brandnewpass")
+        val result = repo.confirmPasswordReset("alice@example.com", "12345678", "brandnewpass")
 
         assertTrue(result is ApiResult.Success)
         val recorded = server.takeRequest()
         assertEquals("/api/v1/auth/password-reset/confirm", recorded.path)
         val sent = recorded.body.readUtf8()
-        assertTrue(sent.contains("\"token\":\"tok-abc\""))
+        // The email scopes the lookup server-side, so it must be sent.
+        assertTrue(sent.contains("\"email\":\"alice@example.com\""))
+        assertTrue(sent.contains("\"code\":\"12345678\""))
         assertTrue(sent.contains("\"new_password\":\"brandnewpass\""))
     }
 
@@ -238,7 +240,7 @@ class AuthRepositoryTest {
         """.trimIndent()
         server.enqueue(jsonResponse(422, body))
 
-        val result = repo.confirmPasswordReset("tok-abc", "short")
+        val result = repo.confirmPasswordReset("alice@example.com", "12345678", "short")
 
         assertTrue(result is ApiResult.HttpFailure)
         val fail = result as ApiResult.HttpFailure

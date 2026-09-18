@@ -8,10 +8,9 @@ data class RegisterRequest(
     val username: String,
     val password: String,
     val display_name: String,
-    // Optional recovery email. Null is omitted from the JSON (the
-    // converter uses explicitNulls = false), so the backend treats an
-    // absent value as "no email".
-    val email: String? = null,
+    // Recovery email. Required: it is the only self-service way back into
+    // an account, so the backend rejects a missing or blank value.
+    val email: String,
 )
 
 @Serializable
@@ -29,9 +28,8 @@ data class LoginResponse(
 @Serializable
 data class UpdateProfileRequest(
     val display_name: String,
-    // Always sent so the caller can both set and clear the recovery
-    // email: a non-blank value sets it, an empty string clears it
-    // server-side (PATCH /auth/me keys off the field being present).
+    // The recovery email can be changed but no longer cleared — the
+    // backend rejects a blank value, so callers must not send one.
     val email: String,
 )
 
@@ -53,6 +51,10 @@ data class PasswordResetRequestBody(
 
 @Serializable
 data class PasswordResetConfirmBody(
-    val token: String,
+    // The account's email scopes the lookup: reset codes are short, so
+    // the backend resolves the account first and only then checks the
+    // code against that account.
+    val email: String,
+    val code: String,
     val new_password: String,
 )

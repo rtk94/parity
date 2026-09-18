@@ -17,12 +17,15 @@ import kotlinx.coroutines.launch
 /** Minimum new-password length; mirrors the backend's MIN_PASSWORD_LENGTH. */
 const val MIN_RESET_PASSWORD_LENGTH = 8
 
-/** The two steps of the paste-token reset flow. */
+/** Digits in an emailed reset code; mirrors the backend's RESET_CODE_LENGTH. */
+const val RESET_CODE_LENGTH = 8
+
+/** The two steps of the emailed-code reset flow. */
 enum class ResetPhase {
-    /** Enter the account email to request a token. */
+    /** Enter the account email to request a code. */
     Request,
 
-    /** Paste the emailed token and choose a new password. */
+    /** Enter the emailed code and choose a new password. */
     Confirm,
 }
 
@@ -37,11 +40,15 @@ sealed interface ResetError {
 data class ForgotPasswordState(
     val phase: ResetPhase = ResetPhase.Request,
     val email: String = "",
-    val token: String = "",
+    val code: String = "",
     val newPassword: String = "",
     val submitting: Boolean = false,
     val error: ResetError? = null,
-)
+) {
+    /** The confirm step is submittable only with a full-length code. */
+    val codeComplete: Boolean
+        get() = code.length == RESET_CODE_LENGTH
+}
 
 class ForgotPasswordViewModel(
     private val authRepository: AuthRepository,
@@ -54,8 +61,15 @@ class ForgotPasswordViewModel(
         _state.update { it.copy(email = value, error = null) }
     }
 
-    fun onTokenChange(value: String) {
-        _state.update { it.copy(token = value, error = null) }
+    /**
+     * Accepts only digits and never more than a full code. Mail clients
+     * and humans add spaces and dashes when copying; filtering here means
+     * a paste of "1234 5678" lands as a valid code instead of reading as
+     * a typo.
+     */
+    fun onCodeChange(value: String) {
+        val digits = value.filter { it.isDigit() }.take(RESET_CODE_LENGTH)
+        _state.update { it.copy(code = digits, error = null) }
     }
 
     fun onNewPasswordChange(value: String) {
@@ -63,7 +77,7 @@ class ForgotPasswordViewModel(
     }
 
     /**
-     * Requests a reset token for the entered email. The backend is
+     * Requests a reset code for the entered email. The backend is
      * enumeration-resistant (always 204), so any non-error response
      * advances to the confirm step — the UI never reveals whether the
      * address was registered.
@@ -92,19 +106,24 @@ class ForgotPasswordViewModel(
     }
 
     /**
-     * Consumes the pasted token and sets the new password. On success the
+     * Consumes the emailed code and sets the new password. On success the
      * backend revokes every session, so [onSuccess] should route back to
      * the login screen where the user signs in fresh.
      */
     fun confirmReset(onSuccess: () -> Unit) {
         val s = _state.value
-        if (s.token.isBlank() || s.newPassword.length < MIN_RESET_PASSWORD_LENGTH || s.submitting) {
+        if (!s.codeComplete || s.newPassword.length < MIN_RESET_PASSWORD_LENGTH || s.submitting) {
             return
         }
 
         _state.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
-            val result = authRepository.confirmPasswordReset(s.token.trim(), s.newPassword)
+            // The email from the request step scopes the code lookup.
+            val result = authRepository.confirmPasswordReset(
+                email = s.email.trim(),
+                code = s.code,
+                newPassword = s.newPassword,
+            )
             when (result) {
                 is ApiResult.Success -> {
                     _state.update { it.copy(submitting = false) }
@@ -126,14 +145,14 @@ class ForgotPasswordViewModel(
     /** Return to the request step, e.g. to re-send with a corrected email. */
     fun backToRequest() {
         _state.update {
-            it.copy(phase = ResetPhase.Request, token = "", newPassword = "", error = null)
+            it.copy(phase = ResetPhase.Request, code = "", newPassword = "", error = null)
         }
     }
 
     private fun mapHttpError(code: Int, errorCode: String?): ResetError = when {
         code == 429 -> ResetError.RateLimited
         code == 422 && errorCode == "weak_password" -> ResetError.WeakPassword
-        // invalid_token, and any other 422, read as a bad/expired token.
+        // invalid_token, and any other 422, read as a bad/expired code.
         code == 422 -> ResetError.InvalidToken
         else -> ResetError.Generic
     }
