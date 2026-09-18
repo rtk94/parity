@@ -168,32 +168,75 @@ working immediately.
 ## Outbound email (password reset)
 
 Self-service password reset (see
-[ADR-0002](adr/0002-password-reset-transport.md)) emails a single-use
-token to the account's recovery address. Delivery is **off until each
-environment is given SMTP settings** — with `MAIL_SERVER` unset the
-backend uses a no-op sender, so `POST /auth/password-reset/request` still
-returns `204` but delivers nothing. Like FCM, this can be rolled out
-staging-first with no risk to production.
+[ADR-0002](adr/0002-password-reset-transport.md) and its amendment)
+emails a single-use 8-digit code to the account's recovery address, and
+registration sends a welcome message naming that address. Delivery is
+**off until each environment is given SMTP settings** — with
+`MAIL_SERVER` unset the backend uses a no-op sender, so
+`POST /auth/password-reset/request` still returns `204` but delivers
+nothing.
 
-The transport is provider-agnostic SMTP, so point it at whatever relay
-the environment uses (Amazon SES, Postmark, a self-managed server).
-Set in `.env` (see `backend/.env.example`):
+> This is not hypothetical: the first internal-testing release shipped
+> with `MAIL_SERVER` unset, which made the whole reset flow dead on
+> arrival while every endpoint reported success. **Configuring this is
+> what makes password reset work at all** — treat it as part of the
+> release, not an optional extra.
 
-```bash
-MAIL_SERVER=email-smtp.us-east-1.amazonaws.com
-MAIL_PORT=587
-MAIL_USERNAME=<smtp-username>
-MAIL_PASSWORD=<smtp-password>          # a relay credential, not an account password
-MAIL_USE_TLS=true
-MAIL_FROM=no-reply@parity.rknepp.com   # must be a verified sender for the relay
-PASSWORD_RESET_URL_BASE=https://parity.rknepp.com/reset  # raw token appended
-PASSWORD_RESET_LIFETIME_MINUTES=60
+The transport is provider-agnostic SMTP. The hosted instance uses
+**Resend**; any relay (SES, Postmark, a self-managed server) works by
+changing these values alone.
+
+### 1. Verify the sending domain
+
+In the Resend dashboard, add `parity.rknepp.com` as a domain. It issues
+DNS records to publish — typically an MX and a TXT (SPF) on a `send.`
+subdomain, plus a `resend._domainkey` TXT for DKIM. Add them at the DNS
+provider and wait for the dashboard to show the domain verified.
+
+Publish a DMARC record too, starting permissively:
+
+```
+_dmarc.parity.rknepp.com  TXT  "v=DMARC1; p=none; rua=mailto:dmarc@rknepp.com"
 ```
 
-After configuring, restart the service and verify end to end: set an
-email on a test account (`PATCH /auth/me`), request a reset, and confirm
-the message arrives. `create_app().extensions["email_sender"]` should be
-`SmtpEmailSender`, not `NullEmailSender`, once `MAIL_SERVER` is set.
+Without SPF and DKIM aligned, reset codes land in spam — which fails
+exactly as silently as having no relay at all.
+
+### 2. Configure the environment
+
+Mint an API key, then set in `.env` (see `backend/.env.example`):
+
+```bash
+MAIL_SERVER=smtp.resend.com
+MAIL_PORT=587
+MAIL_USERNAME=resend                   # literal; Resend's SMTP username
+MAIL_PASSWORD=re_xxxxxxxx              # the API key, not an account password
+MAIL_USE_TLS=true
+MAIL_FROM=no-reply@parity.rknepp.com   # must be on the verified domain
+PASSWORD_RESET_LIFETIME_MINUTES=15
+# PASSWORD_RESET_MAX_ATTEMPTS=5        # wrong guesses before a code burns
+```
+
+Check the current free-tier daily/monthly caps in the dashboard rather
+than assuming them; exceeding a cap degrades to the same silent
+non-delivery this section exists to prevent.
+
+### 3. Verify
+
+Restart the service and confirm the transport seam actually flipped:
+
+```bash
+cd /var/www/parity/backend
+.venv/bin/python -c "import app; print(type(app.create_app().extensions['email_sender']).__name__)"
+```
+
+Expect `SmtpEmailSender`, not `NullEmailSender`. Then check end to end:
+register a throwaway account with a real address (the welcome email
+should arrive), request a reset, and confirm the code lands in the inbox
+rather than spam.
+
+Roll out **staging first** — it is the same one-line config change in
+either environment, and a misconfigured relay is invisible from the API.
 
 ## Attachment storage
 

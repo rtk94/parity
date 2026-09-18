@@ -22,6 +22,11 @@ from typing import Any, Protocol, runtime_checkable
 
 logger = logging.getLogger(__name__)
 
+# Sends happen synchronously on the request thread and production runs
+# two gunicorn workers, so an unreachable relay must not pin a worker for
+# long. Moving delivery off-thread is the real fix; this caps the damage.
+_SMTP_TIMEOUT_SECONDS = 5
+
 
 @dataclass
 class EmailMessage:
@@ -71,7 +76,7 @@ class SmtpEmailSender:
         mime["Subject"] = message.subject
         mime.set_content(message.body)
         try:
-            with smtplib.SMTP(self._host, self._port, timeout=10) as smtp:
+            with smtplib.SMTP(self._host, self._port, timeout=_SMTP_TIMEOUT_SECONDS) as smtp:
                 if self._use_tls:
                     smtp.starttls()
                 if self._username:

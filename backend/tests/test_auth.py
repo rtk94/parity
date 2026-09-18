@@ -21,6 +21,9 @@ def _register(client: FlaskClient, **overrides):
         "username": "alice",
         "password": "correct horse battery staple",
         "display_name": "Alice",
+        # Required since the ADR-0002 amendment; override to exercise
+        # the validation paths.
+        "email": "alice@example.test",
     }
     payload.update(overrides)
     return client.post("/api/v1/auth/register", json=payload)
@@ -98,7 +101,9 @@ def test_revoked_token_returns_401(app: Flask, client: FlaskClient) -> None:
 
 def test_duplicate_username_returns_409(client: FlaskClient) -> None:
     assert _register(client).status_code == 201
-    response = _register(client, display_name="Other Alice")
+    # A fresh email, so the username is the only thing colliding —
+    # email uniqueness is checked first and would otherwise mask it.
+    response = _register(client, display_name="Other Alice", email="other-alice@example.test")
     assert response.status_code == 409
     assert response.get_json()["error"]["code"] == "username_taken"
 

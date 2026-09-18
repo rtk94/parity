@@ -85,12 +85,25 @@ def register_limit():
 
 
 def password_reset_limit():
-    """Return the per-IP password-reset limit decorator.
+    """Return the per-IP password-reset *request* limit decorator.
 
-    Keyed by IP (the request is unauthenticated) to cap both reset-email
-    spamming and token-guessing attempts.
+    Keyed by IP (the request is unauthenticated) to cap reset-email
+    spamming.
     """
     return limiter.limit(lambda: current_app.config["RATELIMIT_PASSWORD_RESET"])
+
+
+def password_reset_confirm_limit():
+    """Return the per-IP password-reset *confirm* limit decorator.
+
+    Looser than the request limit on purpose. Guessing is bounded by the
+    per-code attempt counter in ``services.password_reset``, which burns
+    the code after a handful of wrong tries; this limit only exists to
+    stop an IP hammering the endpoint, and setting it as tight as the
+    request limit would lock out a user who fat-fingers their own code
+    twice — along with everyone else behind the same NAT.
+    """
+    return limiter.limit(lambda: current_app.config["RATELIMIT_PASSWORD_RESET_CONFIRM"])
 
 
 def login_username_key_func() -> str | None:
