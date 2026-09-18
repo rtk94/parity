@@ -19,6 +19,7 @@ import androidx.navigation.toRoute
 import com.rknepp.parity.app.LocalServiceLocator
 import com.rknepp.parity.app.StartupDestination
 import com.rknepp.parity.auth.events.AuthEvent
+import com.rknepp.parity.auth.ui.email.RecoveryEmailGate
 import com.rknepp.parity.auth.ui.forgot.ForgotPasswordScreen
 import com.rknepp.parity.auth.ui.login.LoginScreen
 import com.rknepp.parity.auth.ui.register.RegisterScreen
@@ -121,14 +122,20 @@ fun ParityNavHost(
             )
         }
         composable<Route.Home> {
-            MainScreen(
-                onNavigateToRelationshipDetail = { id ->
-                    navController.navigate(Route.RelationshipDetail(id))
-                },
-                onNavigateToCreateRelationship = {
-                    navController.navigate(Route.CreateRelationship)
-                },
-            )
+            // Accounts predating the email requirement cannot be
+            // recovered, so the gate holds the app closed until one is
+            // on file. Wrapping here rather than adding a route keeps the
+            // back stack untouched and covers login and relaunch alike.
+            RecoveryEmailGate {
+                MainScreen(
+                    onNavigateToRelationshipDetail = { id ->
+                        navController.navigate(Route.RelationshipDetail(id))
+                    },
+                    onNavigateToCreateRelationship = {
+                        navController.navigate(Route.CreateRelationship)
+                    },
+                )
+            }
         }
         composable<Route.CreateRelationship> {
             CreateRelationshipScreen(

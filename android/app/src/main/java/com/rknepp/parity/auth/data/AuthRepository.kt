@@ -30,7 +30,7 @@ class AuthRepository(
         username: String,
         password: String,
         displayName: String,
-        email: String? = null,
+        email: String,
     ): ApiResult<UserSummary> = apiCall {
         authApiProvider().register(RegisterRequest(username, password, displayName, email))
     }
@@ -70,7 +70,7 @@ class AuthRepository(
     }
 
     /**
-     * Requests a password-reset token be emailed. The backend is
+     * Requests a password-reset code be emailed. The backend is
      * enumeration-resistant — it returns 204 whether or not the address
      * is registered — so a [ApiResult.Success] here only means the
      * request was accepted, not that an email was sent.
@@ -79,13 +79,20 @@ class AuthRepository(
         apiCallUnit { authApiProvider().requestPasswordReset(PasswordResetRequestBody(email)) }
 
     /**
-     * Consumes a reset token and sets a new password. On success the
-     * backend has revoked every existing session for the account, so the
-     * user must sign in again with the new password.
+     * Consumes an emailed reset code and sets a new password. The [email]
+     * scopes the lookup — codes are short, so the backend resolves the
+     * account before checking the code against it. On success the backend
+     * has revoked every existing session, so the user must sign in again.
      */
-    suspend fun confirmPasswordReset(token: String, newPassword: String): ApiResult<Unit> =
+    suspend fun confirmPasswordReset(
+        email: String,
+        code: String,
+        newPassword: String,
+    ): ApiResult<Unit> =
         apiCallUnit {
-            authApiProvider().confirmPasswordReset(PasswordResetConfirmBody(token, newPassword))
+            authApiProvider().confirmPasswordReset(
+                PasswordResetConfirmBody(email, code, newPassword),
+            )
         }
 
     /**

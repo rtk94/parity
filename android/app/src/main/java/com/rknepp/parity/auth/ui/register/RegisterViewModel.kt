@@ -53,16 +53,23 @@ class RegisterViewModel(
     fun submit(onRegistered: (username: String) -> Unit) {
         val s = _state.value
         if (s.submitting) return
-        if (s.username.isBlank() || s.password.isEmpty() || s.displayName.isBlank()) return
+        // Email is required: without one the account can never be
+        // recovered, so it gates submission like every other field.
+        if (s.username.isBlank() ||
+            s.password.isEmpty() ||
+            s.displayName.isBlank() ||
+            s.email.isBlank()
+        ) {
+            return
+        }
 
         _state.update { it.copy(submitting = true, error = null) }
         viewModelScope.launch {
-            val email = s.email.trim().ifBlank { null }
             val result = authRepository.register(
                 username = s.username.trim(),
                 password = s.password,
                 displayName = s.displayName.trim(),
-                email = email,
+                email = s.email.trim(),
             )
             when (result) {
                 is ApiResult.Success -> {

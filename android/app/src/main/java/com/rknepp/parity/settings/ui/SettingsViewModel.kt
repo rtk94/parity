@@ -94,10 +94,17 @@ class SettingsViewModel(
             _state.update { it.copy(profileError = "Display name cannot be empty") }
             return
         }
+        // The recovery address can be changed but not removed — an
+        // account without one can never be recovered. Caught here so a
+        // cleared field reads as a clear message rather than a 422.
+        if (email.isBlank()) {
+            _state.update {
+                it.copy(profileError = "Email is required so you can reset your password")
+            }
+            return
+        }
         _state.update { it.copy(isSavingProfile = true, profileError = null, profileSuccess = false) }
         viewModelScope.launch {
-            // Email is sent as-is (trimmed): a blank string clears the
-            // recovery address server-side, a value sets it.
             val request = UpdateProfileRequest(displayName.trim(), email.trim())
             when (val result = meRepository.updateProfile(request)) {
                 is ApiResult.Success -> _state.update {

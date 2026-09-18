@@ -173,6 +173,20 @@ in DB) that should not be casually broken.
   (jpeg/png/webp/heic/pdf) and `ATTACHMENT_MAX_BYTES` (default 10 MB)
   gate uploads. Attachment metadata is included in the account export.
   The Android UI is a planned follow-up.
+- Post-Phase 8, required email + code reset (Android): the client half
+  of the reset fix. Registration now requires an email (field no longer
+  "optional", gates the submit button); the reset screen takes an
+  **8-digit numeric code** on a number keypad, filtering non-digits so a
+  pasted "1234 5678" still lands clean, and carries the request-step
+  email into confirm (the backend scopes the code lookup by account).
+  Settings can change but no longer clear the address. Legacy accounts
+  with no email on file are held behind a **blocking gate**
+  (`auth/ui/email/RecoveryEmailGate.kt`) wrapping `MainScreen` inside
+  `Route.Home` — it wraps rather than adding a route, so the back stack
+  is untouched and both fresh login and cold relaunch are covered. On a
+  failed `/auth/me` the gate shows a retry rather than falling through;
+  it has a sign-out escape hatch so a user who cannot supply a usable
+  address is not trapped. Requires the matching backend.
 - Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.

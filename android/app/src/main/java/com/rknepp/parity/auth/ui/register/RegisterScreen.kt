@@ -163,7 +163,8 @@ fun RegisterScreen(
                 enabled = !state.submitting &&
                     state.username.isNotBlank() &&
                     state.password.isNotEmpty() &&
-                    state.displayName.isNotBlank(),
+                    state.displayName.isNotBlank() &&
+                    state.email.isNotBlank(),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
