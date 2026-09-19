@@ -22,12 +22,20 @@ def make_user(
     username: str,
     password: str | None = None,
     display_name: str | None = None,
+    email: str | None = None,
 ) -> dict[str, Any]:
-    """Register a user and return its public dict (id, username, display_name)."""
+    """Register a user and return its public dict (id, username, display_name).
+
+    Registration requires a unique recovery address, so one is derived
+    from ``username`` unless a test needs a specific value. ``.test`` is
+    the reserved TLD for exactly this (RFC 2606), so a stray send can
+    never reach a real mailbox.
+    """
     payload = {
         "username": username,
         "password": password or f"pw-{username}",
         "display_name": display_name or username.capitalize(),
+        "email": email or f"{username}@example.test",
     }
     response = client.post("/api/v1/auth/register", json=payload)
     assert response.status_code == 201, response.get_json()

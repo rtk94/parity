@@ -36,6 +36,12 @@ class Config:
     RATELIMIT_UPDATE_PROFILE: str = os.environ.get("RATELIMIT_UPDATE_PROFILE", "10 per hour")
     RATELIMIT_REFRESH: str = os.environ.get("RATELIMIT_REFRESH", "10 per hour")
     RATELIMIT_PASSWORD_RESET: str = os.environ.get("RATELIMIT_PASSWORD_RESET", "5 per hour")
+    # Confirm is looser than request: the per-code attempt cap is the real
+    # guard, so a user who mistypes a digit twice is not locked out for an
+    # hour along with everyone else behind their NAT.
+    RATELIMIT_PASSWORD_RESET_CONFIRM: str = os.environ.get(
+        "RATELIMIT_PASSWORD_RESET_CONFIRM", "10 per hour"
+    )
 
     # Bearer token lifetimes. Idle is sliding from ``last_used_at``;
     # absolute is a hard cap from ``created_at``.
@@ -58,12 +64,12 @@ class Config:
     MAIL_PASSWORD: str | None = os.environ.get("MAIL_PASSWORD") or None
     MAIL_USE_TLS: bool = os.environ.get("MAIL_USE_TLS", "true").lower() in {"1", "true", "yes"}
     MAIL_FROM: str = os.environ.get("MAIL_FROM", "no-reply@parity.local")
-    # Base URL the client uses to complete a reset; the raw token is
-    # appended. Shown in the reset email.
-    PASSWORD_RESET_URL_BASE: str | None = os.environ.get("PASSWORD_RESET_URL_BASE") or None
+    # Reset codes are short numeric strings delivered by email, so the
+    # window is deliberately tight and each code has an attempt budget.
     PASSWORD_RESET_LIFETIME_MINUTES: int = int(
-        os.environ.get("PASSWORD_RESET_LIFETIME_MINUTES", "60")
+        os.environ.get("PASSWORD_RESET_LIFETIME_MINUTES", "15")
     )
+    PASSWORD_RESET_MAX_ATTEMPTS: int = int(os.environ.get("PASSWORD_RESET_MAX_ATTEMPTS", "5"))
 
     # Attachment storage (see ADR-0003). Bytes go to S3-compatible object
     # storage when ATTACHMENT_S3_BUCKET is set (works with S3, R2, or OCI

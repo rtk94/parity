@@ -144,13 +144,19 @@ def test_register_limit_returns_429_after_five_attempts(
                 "username": f"user{i}",
                 "password": "pw",
                 "display_name": f"User {i}",
+                "email": f"user{i}@example.test",
             },
         )
         assert resp.status_code == 201, f"Attempt {i + 1}: {resp.get_json()}"
 
     resp = rate_limited_client.post(
         "/api/v1/auth/register",
-        json={"username": "user5", "password": "pw", "display_name": "User 5"},
+        json={
+            "username": "user5",
+            "password": "pw",
+            "display_name": "User 5",
+            "email": "user5@example.test",
+        },
     )
     assert resp.status_code == 429
 
@@ -166,6 +172,7 @@ def test_register_limit_does_not_affect_separate_ip(
                 "username": f"ip1_{i}",
                 "password": "pw",
                 "display_name": f"U{i}",
+                "email": f"ip1-{i}@example.test",
             },
             environ_overrides={"REMOTE_ADDR": "10.0.0.1"},
         )
@@ -173,7 +180,12 @@ def test_register_limit_does_not_affect_separate_ip(
     # IP2 should still be able to register fresh users.
     resp = rate_limited_client.post(
         "/api/v1/auth/register",
-        json={"username": "fromip2", "password": "pw", "display_name": "U"},
+        json={
+            "username": "fromip2",
+            "password": "pw",
+            "display_name": "U",
+            "email": "fromip2@example.test",
+        },
         environ_overrides={"REMOTE_ADDR": "10.0.0.2"},
     )
     assert resp.status_code == 201
@@ -246,11 +258,17 @@ def test_429_body_matches_standard_envelope(rate_limited_client: FlaskClient) ->
                 "username": f"u{i}",
                 "password": "pw",
                 "display_name": "U",
+                "email": f"u{i}@example.test",
             },
         )
     resp = rate_limited_client.post(
         "/api/v1/auth/register",
-        json={"username": "u5", "password": "pw", "display_name": "U"},
+        json={
+            "username": "u5",
+            "password": "pw",
+            "display_name": "U",
+            "email": "u5@example.test",
+        },
     )
     assert resp.status_code == 429
     body = resp.get_json()
