@@ -317,3 +317,63 @@ sudo bash -c "gunzip -c '$latest' > /tmp/r.db && sqlite3 /tmp/r.db 'PRAGMA integ
 > Upgrade it to a durable off-site store — OCI Object Storage (the box
 > is an OCI instance) with an instance principal, lifecycle retention,
 > and a periodic automated restore test.
+
+## Android release builds (Play Store)
+
+The Play Store artifact is an **Android App Bundle** (`.aab`) built from
+the `release` build type, which pins the production backend
+(`https://api.parity.rknepp.com/`) and the `parity-production` Firebase
+project — see the build-type comment in
+[`android/app/build.gradle.kts`](../android/app/build.gradle.kts).
+
+### Signing material
+
+Release builds are signed with an **upload key** (RSA 4096, alias
+`parity-upload`). Two files hold it, both gitignored:
+
+| File | What it is |
+| --- | --- |
+| `android/upload-keystore.jks` | the PKCS12 keystore |
+| `android/keystore.properties` | store/key passwords + alias |
+
+> **Back both up offline** (password manager + an encrypted copy that is
+> not this machine). They exist nowhere else. Losing them does not brick
+> the app — Google Play App Signing holds the real app signing key, and
+> an upload key can be reset through Play Console support — but the
+> reset is manual and slow.
+
+When `keystore.properties` is absent the release build still assembles,
+just **unsigned**, so CI and fresh clones are unaffected. That mirrors
+how the committed placeholder `google-services.json` keeps the Google
+Services plugin working without the real per-environment configs.
+
+### Cutting a build
+
+Bump `versionCode` (and `versionName` if the release is user-visible) in
+`android/app/build.gradle.kts` — Play rejects a re-used `versionCode` —
+then:
+
+```bash
+cd android && ./gradlew clean bundleRelease
+```
+
+The bundle lands at `android/app/build/outputs/bundle/release/app-release.aab`.
+
+Confirm it is signed before uploading — an unsigned bundle is rejected
+at upload time:
+
+```bash
+unzip -l android/app/build/outputs/bundle/release/app-release.aab | grep -E 'META-INF/[^/]*\.(RSA|SF)$'
+```
+
+Two `META-INF/PARITY-U.*` entries means signed; no output means the
+keystore was not picked up.
+
+### Uploading
+
+Play Console → **Testing → Internal testing → Create new release** →
+upload the `.aab`. The first upload enrolls the app in Play App Signing;
+accept it. Add testers by email list, then share the opt-in URL.
+
+Listing copy (description, privacy policy, terms, data-safety answers)
+lives in [`docs/play_store/`](play_store/).
