@@ -173,6 +173,25 @@ in DB) that should not be casually broken.
   (jpeg/png/webp/heic/pdf) and `ATTACHMENT_MAX_BYTES` (default 10 MB)
   gate uploads. Attachment metadata is included in the account export.
   The Android UI is a planned follow-up.
+- Post-Phase 8, password reset made real (backend — amends ADR-0002):
+  the first internal-testing release shipped a reset path that could not
+  work — `MAIL_SERVER` was never configured (so every request returned
+  its enumeration-resistant `204` while `NullEmailSender` dropped the
+  mail), email was optional (so most accounts had no address), and the
+  credential was a 43-char token the UI asked users to hand-type as a
+  "code". Fixed on three fronts: **email is now required** (mandatory at
+  registration, no longer clearable via `PATCH /me`; the column stays
+  nullable because deletion anonymizes it, so enforcement is
+  service-layer); the credential is an **8-digit code whose digest is
+  scoped to its owner** (`sha256("<user_id>:<code>")`, so a short code
+  cannot be guessed across accounts) with a **per-code attempt budget**
+  (`PASSWORD_RESET_MAX_ATTEMPTS`, default 5) and a 15-minute lifetime;
+  and registration sends a **welcome email** naming the recovery address
+  as a live delivery check. `POST /auth/password-reset/confirm` now takes
+  `{email, code, new_password}` — a breaking change for the shipped
+  build. `PASSWORD_RESET_URL_BASE` removed (no web client to land on).
+  Deployment uses **Resend** SMTP; `docs/DEPLOYMENT.md` carries the DNS
+  and verification runbook.
 - Phase 9+ (planned): remaining roadmap items (offline, etc.).
 
 Update this section as phases land.

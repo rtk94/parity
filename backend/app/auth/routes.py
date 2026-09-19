@@ -13,6 +13,7 @@ from app.api._rate_limits import (
     change_password_limit,
     login_ip_limit,
     login_username_limit,
+    password_reset_confirm_limit,
     password_reset_limit,
     refresh_limit,
     register_limit,
@@ -83,16 +84,15 @@ def register():
     if not isinstance(display_name, str) or not display_name.strip():
         return error_response(422, "invalid_display_name", "display_name is required.")
 
-    # Email is optional. A blank/absent value stays null; a present value
-    # is validated and must be unique across accounts.
-    email: str | None = None
-    if email_raw is not None and not (isinstance(email_raw, str) and not email_raw.strip()):
-        try:
-            email = password_reset_service.clean_email(email_raw)
-        except ValidationError as exc:
-            return error_response(422, exc.code, exc.message)
-        if _email_in_use(email):
-            return error_response(409, "email_taken", "Email is already in use.")
+    # Email is required: it is the only self-service recovery channel, and
+    # an account without one can never reset its password (ADR-0002
+    # amendment). Validated and unique across live accounts.
+    try:
+        email = password_reset_service.clean_email(email_raw)
+    except ValidationError as exc:
+        return error_response(422, exc.code, exc.message)
+    if _email_in_use(email):
+        return error_response(409, "email_taken", "Email is already in use.")
 
     username = username.strip()
     display_name = display_name.strip()
@@ -109,6 +109,11 @@ def register():
     except IntegrityError:
         db.session.rollback()
         return error_response(409, "username_taken", "Username is already taken.")
+
+    # Best-effort, after the account is durably committed: confirms the
+    # recovery address and surfaces a typo now rather than at the moment
+    # the user is locked out and needs it to work.
+    password_reset_service.send_welcome_email(user)
 
     return user.to_public_dict(), 201
 
@@ -208,21 +213,18 @@ def update_profile():
             return error_response(422, "invalid_display_name", "display_name cannot be empty.")
         g.current_user.display_name = display_name.strip()
 
-    # ``email`` is settable and clearable: an explicit null or blank
-    # string removes the recovery address; a present value is validated
-    # and must not collide with another account.
+    # ``email`` is settable but no longer clearable — every live account
+    # must keep a recovery address. A present value is validated and must
+    # not collide with another account. (Deletion still nulls it out; that
+    # path goes through ``account.delete_account``, not here.)
     if "email" in data:
-        email_raw = data.get("email")
-        if email_raw is None or (isinstance(email_raw, str) and not email_raw.strip()):
-            g.current_user.email = None
-        else:
-            try:
-                email = password_reset_service.clean_email(email_raw)
-            except ValidationError as exc:
-                return error_response(422, exc.code, exc.message)
-            if _email_in_use(email, exclude_user_id=g.current_user.id):
-                return error_response(409, "email_taken", "Email is already in use.")
-            g.current_user.email = email
+        try:
+            email = password_reset_service.clean_email(data.get("email"))
+        except ValidationError as exc:
+            return error_response(422, exc.code, exc.message)
+        if _email_in_use(email, exclude_user_id=g.current_user.id):
+            return error_response(409, "email_taken", "Email is already in use.")
+        g.current_user.email = email
 
     db.session.commit()
     return g.current_user.to_private_dict(), 200
@@ -308,8 +310,8 @@ def change_password():
 @auth_bp.post("/password-reset/request")
 @password_reset_limit()
 def password_reset_request():
-    """Request a password-reset email. Always 204 — never reveals whether
-    the address is registered (see ADR-0002)."""
+    """Request a password-reset code by email. Always 204 — never reveals
+    whether the address is registered (see ADR-0002)."""
     data = _json_body()
     email = data.get("email") if isinstance(data, dict) else None
     password_reset_service.request_reset(email)
@@ -317,14 +319,18 @@ def password_reset_request():
 
 
 @auth_bp.post("/password-reset/confirm")
-@password_reset_limit()
+@password_reset_confirm_limit()
 @translates_service_errors
 def password_reset_confirm():
-    """Consume a reset token and set a new password; ends all sessions."""
+    """Consume a reset code and set a new password; ends all sessions."""
     data = _json_body()
     if data is None:
         return error_response(400, "bad_request", "JSON body required.")
-    password_reset_service.confirm_reset(data.get("token"), data.get("new_password"))
+    password_reset_service.confirm_reset(
+        data.get("email"),
+        data.get("code"),
+        data.get("new_password"),
+    )
     return "", 204
 
 
