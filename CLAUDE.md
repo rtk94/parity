@@ -198,7 +198,10 @@ Update this section as phases land.
 
 ## Environment
 
-- Working tree: `/home/rich/Programming/parity/` (this directory).
+The values below describe the maintainer's primary workstation. Don't
+assume them — see *Remote and containerised sessions* underneath.
+
+- Working tree: `/home/rich/Programming/parity/`.
 - Remote: `git@github.com:rtk94/parity.git`, default branch `main`.
 - Python: system Python 3.13 (host); `pyproject.toml` declares 3.12+.
 - Backend installed editable: `pip install -e ".[dev]"` from
@@ -206,6 +209,31 @@ Update this section as phases land.
 - Required env: `SECRET_KEY` (any string for dev). For local commands
   you can prefix `SECRET_KEY=test`; for an actual server, copy
   `backend/.env.example` to `backend/.env` and fill in a real value.
+
+### Remote and containerised sessions
+
+Work also happens on a remote dev box and in ephemeral cloud
+containers, where the repo is recloned per session and the toolchain may
+be absent. What changes:
+
+- **The working tree path differs.** Derive it (`git rev-parse
+  --show-toplevel`) rather than hardcoding the path above.
+- **Provision with `scripts/bootstrap-dev.sh`.** It creates
+  `backend/.venv`, installs the editable backend, and installs JDK 17 +
+  the Android SDK. `--verify` runs the full test/lint gate in one
+  command. The system packages it installs need root, so it belongs in
+  the image build or the environment's setup script — an agent sandbox
+  usually sets `no_new_privileges`, which defeats `sudo`.
+- **Use the venv explicitly.** `backend/.venv/bin/pytest` and
+  `backend/.venv/bin/ruff`; nothing is on `PATH` by default.
+- **`gh` may be absent.** Where it is, GitHub work (PRs, CI status,
+  review comments) goes through the GitHub MCP tools instead. The step-7
+  `gh pr create` recipe below is host-specific.
+- **Sandboxes can mount config files into the working tree.** Per-user
+  dotfiles and agent config appear as untracked entries; `.gitignore`
+  covers the known ones. `.gitmodules` is a deliberate exception — a
+  real one must stay committable — so expect it as untracked noise on
+  such a box. Stage explicit paths, never `git add -A`.
 
 ## Architecture conventions
 
