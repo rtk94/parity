@@ -52,7 +52,10 @@ config-gated SMTP sender (`app/services/email_sender.py`, no-op until
 single-use `password_reset_token`; and `POST
 /auth/password-reset/request` (enumeration-resistant, always `204`) +
 `/confirm` (sets the new password and revokes all sessions). Closes
-issue #7 on the backend. The Android forgot-password UI is a follow-up.
+issue #7 on the backend. The Android forgot-password UI landed in
+`42b6134`; the follow-up making email mandatory and the credential an
+8-digit code is backend-side in `0cf6e97`, with the matching client on
+`feature/required-email-reset-android`.
 
 ### Recurring expenses — shipped
 
@@ -74,7 +77,8 @@ transport (`app/services/object_store.py`; local-filesystem fallback for
 dev/test), with only metadata (`attachment` table) in the DB. Endpoints
 under `app/api/attachments.py` cover upload (`multipart/form-data`),
 list, download, and uploader-only delete; both parties can view and
-upload. Closes issue #12 on the backend. The Android UI is a follow-up.
+upload. Closes issue #12 on the backend. The Android UI landed in
+`3cc9f36`.
 
 ## Android
 

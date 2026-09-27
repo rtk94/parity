@@ -30,13 +30,17 @@ lint, and end-to-end-flow instructions.
 
 ## Status
 
-**Backend:** Phase 5 complete. On top of the Phase 1/2/3 auth + ledger
-+ balance + hardening work and the Phase 4 onboarding + pagination +
-auth-lifecycle pass, every relationship carries a required
-three-letter `currency_code` set at invite time and immutable
-thereafter (DB-level CHECK plus an extended immutability trigger).
-The currency context is per-relationship; there is no cross-currency
-math anywhere in the backend.
+**Backend:** Phase 5 complete, plus a substantial post-Phase-5 batch.
+On top of the Phase 1/2/3 auth + ledger + balance + hardening work and
+the Phase 4 onboarding + pagination + auth-lifecycle pass, every
+relationship carries a required three-letter `currency_code` set at
+invite time and immutable thereafter (DB-level CHECK plus an extended
+immutability trigger). The currency context is per-relationship; there
+is no cross-currency math anywhere in the backend. Since then: comments
+on entries, expense categories, audit logging, multi-currency per pair,
+system administration, account data export + deletion, push
+notifications, recurring expenses, password reset via a mailed code,
+and attachments on expenses. `CLAUDE.md` carries the full phase log.
 
 **Android:** Phase 8 complete, plus the "Paper" design-system
 overhaul. The client ships a Kotlin + Compose single-activity app, a
