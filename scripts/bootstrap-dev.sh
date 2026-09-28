@@ -24,9 +24,13 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BACKEND="${REPO_ROOT}/backend"
 ANDROID="${REPO_ROOT}/android"
 
-# Matches .github/workflows/android.yml (java-version: 17) and the
-# JavaVersion.VERSION_17 / jvmTarget = "17" in android/app/build.gradle.kts.
-JDK_PACKAGE="openjdk-17-jdk-headless"
+# CI builds on JDK 17 (.github/workflows/android.yml), but any JDK >= 17 works:
+# the build pins its output with JavaVersion.VERSION_17 / jvmTarget = "17" in
+# android/app/build.gradle.kts rather than inheriting the running JDK's version,
+# and no Gradle toolchain is configured. Listed newest-last so a distro that
+# still carries 17 matches CI exactly; Debian trixie and later dropped it.
+JDK_MIN_VERSION=17
+JDK_CANDIDATES="openjdk-17-jdk-headless openjdk-21-jdk-headless openjdk-25-jdk-headless default-jdk-headless"
 
 # Matches compileSdk / targetSdk in android/app/build.gradle.kts.
 SDK_PLATFORM="platforms;android-36"
@@ -102,18 +106,43 @@ bootstrap_backend() {
     "$("${BACKEND}/.venv/bin/python" -c 'from importlib.metadata import version; print(version("flask"))')"
 }
 
-bootstrap_jdk() {
-  log "JDK 17"
+# Major version of the javac on PATH, or empty if there isn't one.
+javac_major() {
+  command -v javac >/dev/null 2>&1 || return 0
+  javac -version 2>&1 | sed -n 's/^javac \([0-9]\{1,\}\).*/\1/p'
+}
 
-  if command -v javac >/dev/null 2>&1; then
-    skip "javac present: $(javac -version 2>&1)"
-    return
+bootstrap_jdk() {
+  log "JDK (>= ${JDK_MIN_VERSION})"
+
+  local have
+  have="$(javac_major)"
+  if [ -n "$have" ]; then
+    if [ "$have" -ge "$JDK_MIN_VERSION" ]; then
+      skip "javac present: $(javac -version 2>&1)"
+      return
+    fi
+    die "javac $have is older than the required ${JDK_MIN_VERSION}; upgrade or adjust PATH"
   fi
 
+  # Distros carry different OpenJDK majors; pick the first one apt can offer
+  # rather than hardcoding a package that may not exist on this release.
+  local pkg="" info
+  for cand in $JDK_CANDIDATES; do
+    info="$(apt-cache policy "$cand" 2>/dev/null || true)"
+    # Here-string, not a pipe: under `set -o pipefail`, `grep -q` closing the
+    # pipe early makes the producer fail with SIGPIPE and sinks the whole test.
+    if grep -q '^  Candidate: [^(]' <<<"$info"; then
+      pkg="$cand"
+      break
+    fi
+  done
+  [ -n "$pkg" ] || die "no OpenJDK >= ${JDK_MIN_VERSION} available from apt (tried: ${JDK_CANDIDATES})"
+
   as_root apt-get update -qq
-  as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$JDK_PACKAGE" \
-    || die "could not install ${JDK_PACKAGE} (check apt sources and egress)"
-  printf '    %s\n' "$(javac -version 2>&1)"
+  as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "$pkg" \
+    || die "could not install ${pkg} (check apt sources and egress)"
+  printf '    installed %s -> %s\n' "$pkg" "$(javac -version 2>&1)"
 }
 
 bootstrap_android_sdk() {
