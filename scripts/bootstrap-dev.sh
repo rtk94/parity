@@ -15,7 +15,9 @@
 # Network egress is required for the stages that install anything. A sandboxed
 # environment must allow: pypi.org, files.pythonhosted.org, deb.debian.org,
 # security.debian.org, dl.google.com, maven.google.com, services.gradle.org,
-# plugins.gradle.org, repo.maven.apache.org, repo1.maven.org.
+# plugins.gradle.org, repo.maven.apache.org, repo1.maven.org, oss.sonatype.org
+# (the last for Robolectric's android-all jars). The Android-side hosts are
+# allowlisted under sandbox.network.allowedDomains in .claude/settings.json.
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
