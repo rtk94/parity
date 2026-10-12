@@ -10,5 +10,17 @@
       "Agent(*)"
     ]
   },
-  "skipDangerousModePermissionPrompt": true
+  "skipDangerousModePermissionPrompt": true,
+  "sandbox":{
+    "network":{
+      "allowedDomains":[
+        "dl.google.com",
+        "maven.google.com",
+        "repo.maven.apache.org",
+        "repo1.maven.org",
+        "plugins.gradle.org",
+        "oss.sonatype.org"
+      ]
+    }
+  }
 }

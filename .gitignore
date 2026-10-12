@@ -53,8 +53,13 @@ coverage.xml
 .mypy_cache/
 
 # Editors
+# Both slash and slash-less forms: these are normally directories, but a
+# containerised dev environment may mount them as single files, and a
+# trailing-slash pattern only matches a directory.
 .idea/
+.idea
 .vscode/
+.vscode
 *.swp
 *.swo
 .DS_Store
@@ -64,6 +69,40 @@ coverage.xml
 .claude/transcripts/
 .claude/plans/
 .claude/memory/cache/
+# Per-machine agent configuration. Only .claude/settings.json is shared;
+# everything else under .claude/ is local to whoever is running the agent.
+.claude/agents
+.claude/commands
+.claude/hooks
+.claude/launch.json
+.claude/loop.md
+.claude/output-styles
+.claude/routines
+.claude/scheduled_tasks.json
+.claude/skills
+.claude/workflows
+.claude/.cc-writes
+# Only the repo-root .claude/ is shared. An agent running with a subdirectory
+# as its working directory synthesises its own config dir there; none of those
+# belong to the project.
+/*/.claude/
+/*/*/.claude/
+
+# Per-user shell, tool, and VCS config. These belong to a developer's home
+# directory, never to the project — but a containerised dev environment can
+# surface them inside the working tree, where an untracked entry is one
+# careless `git add -A` away from being committed.
+.bash_profile
+.bashrc
+.profile
+.zprofile
+.zshrc
+.gitconfig
+.ripgreprc
+.mcp.json
+# Deliberately NOT ignoring .gitmodules, even though a sandbox may surface one
+# here: a real .gitmodules belongs in version control, and ignoring it would
+# quietly break `git submodule add`.
 
 # Additional common files
 *.log
@@ -85,6 +124,8 @@ google-services.json
 .gradle/
 android/.gradle/
 android/local.properties
+# Repo-local SDK, used by scripts/bootstrap-dev.sh when $HOME is unwritable.
+.android-sdk/
 android/**/build/
 android/**/*.iml
 android/captures/
