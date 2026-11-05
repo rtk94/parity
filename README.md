@@ -30,6 +30,10 @@ lint, and end-to-end-flow instructions.
 
 ## Status
 
+**Project status:** in progress, pre-release. The backend and the
+Android app are built and deployed to a private hosted instance. Neither is
+released on any store yet; a Google Play closed test is the next step.
+
 **Backend:** Phase 5 complete, plus a substantial post-Phase-5 batch.
 On top of the Phase 1/2/3 auth + ledger + balance + hardening work and
 the Phase 4 onboarding + pagination + auth-lifecycle pass, every
