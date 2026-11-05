@@ -1,6 +1,13 @@
 Parity
 Copyright 2026 Richard Knepp
 
-This product includes software developed as part of the Parity project
-(https://github.com/rtk94/parity), licensed under the Apache License,
-Version 2.0.
+Parity is licensed under the GNU Affero General Public License, version 3
+only (AGPL-3.0-only). See the LICENSE file.
+
+This repository was published under the Apache License, Version 2.0 from
+2026-07-10 until the relicensing to AGPL-3.0-only on 2026-11-05. Copies
+obtained under Apache-2.0 during that period remain available under it.
+
+Third-party components keep their own licenses: the bundled fonts are under
+the SIL Open Font License (see android/THIRD_PARTY_NOTICES/), and the Gradle
+wrapper scripts are under Apache-2.0.

@@ -66,5 +66,6 @@ Deferred items across all phases are tracked in
 
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE). See
-[`NOTICE`](NOTICE) for attribution.
+Licensed under the [GNU Affero General Public License, version 3](LICENSE)
+(AGPL-3.0-only). Earlier revisions of this repository were published under
+Apache-2.0; see [`NOTICE`](NOTICE) for the details and third-party notices.
