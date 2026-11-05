@@ -6,15 +6,10 @@ be publicly hosted. Build/upload mechanics live in
 
 ## Which file is authoritative
 
-Two documents exist in a draft and a filled-in pair. **The `-final`
-version is the one to publish**; the unsuffixed sibling is the earlier
-draft, kept for its margin notes on choices that were still open
-(GDPR scoping, jurisdiction).
-
-| Publish this | Superseded draft |
-| --- | --- |
-| `parity-privacy-policy-final.md` | `parity-privacy-policy.md` |
-| `parity-terms-of-service-final.md` | `parity-terms-of-service.md` |
+The privacy policy and the terms of service each have a `-final` version.
+**Publish the `-final` files.** The earlier unsuffixed drafts were removed
+from the tree; they remain in git history for their margin notes on choices
+that were still open (GDPR scoping, jurisdiction).
 
 The remaining files have no draft/final split:
 
