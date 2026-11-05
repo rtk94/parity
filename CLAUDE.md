@@ -201,7 +201,7 @@ Update this section as phases land.
 The values below describe the maintainer's primary workstation. Don't
 assume them — see *Remote and containerised sessions* underneath.
 
-- Working tree: `/home/rich/Programming/parity/`.
+- Working tree: `~/Programming/parity/`.
 - Remote: `git@github.com:rtk94/parity.git`, default branch `main`.
 - Python: system Python 3.13 (host); `pyproject.toml` declares 3.12+.
 - Backend installed editable: `pip install -e ".[dev]"` from
@@ -339,7 +339,7 @@ directly to `main`** — always go through a PR.
 ### 1. Start from a clean main
 
 ```bash
-cd /home/rich/Programming/parity
+cd ~/Programming/parity
 git checkout main
 git pull --ff-only
 git status              # working tree clean before branching

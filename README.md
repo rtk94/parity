@@ -30,6 +30,10 @@ lint, and end-to-end-flow instructions.
 
 ## Status
 
+**Project status:** in progress, pre-release. The backend and the
+Android app are built and deployed to a private hosted instance. Neither is
+released on any store yet; a Google Play closed test is the next step.
+
 **Backend:** Phase 5 complete, plus a substantial post-Phase-5 batch.
 On top of the Phase 1/2/3 auth + ledger + balance + hardening work and
 the Phase 4 onboarding + pagination + auth-lifecycle pass, every
@@ -60,7 +64,13 @@ flat editorial layout — with full light/dark support.
 Deferred items across all phases are tracked in
 [`ROADMAP.md`](ROADMAP.md).
 
+## How this was built
+
+This project was developed with Claude Code (Anthropic) assisting.
+`CLAUDE.md` holds the instructions it works from.
+
 ## License
 
-Licensed under the [Apache License, Version 2.0](LICENSE). See
-[`NOTICE`](NOTICE) for attribution.
+Licensed under the [GNU Affero General Public License, version 3](LICENSE)
+(AGPL-3.0-only). Earlier revisions of this repository were published under
+Apache-2.0; see [`NOTICE`](NOTICE) for the details and third-party notices.

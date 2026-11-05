@@ -124,6 +124,10 @@ google-services.json
 .gradle/
 android/.gradle/
 android/local.properties
+# Play Store upload signing material. Real secrets; never commit.
+android/keystore.properties
+*.jks
+*.keystore
 # Repo-local SDK, used by scripts/bootstrap-dev.sh when $HOME is unwritable.
 .android-sdk/
 android/**/build/
