@@ -64,6 +64,11 @@ flat editorial layout — with full light/dark support.
 Deferred items across all phases are tracked in
 [`ROADMAP.md`](ROADMAP.md).
 
+## How this was built
+
+This project was developed with Claude Code (Anthropic) assisting.
+`CLAUDE.md` holds the instructions it works from.
+
 ## License
 
 Licensed under the [GNU Affero General Public License, version 3](LICENSE)
